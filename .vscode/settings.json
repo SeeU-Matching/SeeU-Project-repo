@@ -1,0 +1,7 @@
+{
+    "python.analysis.extraPaths": [
+        "./InfoMatching_Team3",
+        "./InfoMatching_Team1",
+        "./InfoMatching_Team2"
+    ]
+}
