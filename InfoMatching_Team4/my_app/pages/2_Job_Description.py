@@ -148,7 +148,7 @@ def main():
                 connection = sqlite3.connect(db_path)
                 cursor = connection.cursor()
                 for job in st.session_state.jobs_to_delete:
-                    company, title = job.split(": ")
+                    company, title = job.split(": ", 1) # if title also contains ": ", it won't be splited again
                     cursor.execute("DELETE FROM job_description WHERE job_company = ? AND job_title = ?", (company, title))
                 connection.commit()
                 connection.close()
