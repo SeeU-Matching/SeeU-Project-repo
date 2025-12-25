@@ -104,7 +104,12 @@ def main():
         essential_columns = ['job_company', 'job_title']
         filter_columns = [col for col in column_names if col not in ['job_application_url']]
         selectable_columns = [col for col in filter_columns if col not in essential_columns]
+        # Add created_date to selectable_columns if created_at exists (for independent selection)
+        if 'created_at' in column_names and 'created_date' not in selectable_columns:
+            created_at_idx = selectable_columns.index('created_at') if 'created_at' in selectable_columns else len(selectable_columns)
+            selectable_columns.insert(created_at_idx + 1, 'created_date')
         selected_columns = st.multiselect("Display columns", options=selectable_columns, default=selectable_columns if selectable_columns else [])
+        # SQL query only uses actual database columns (exclude computed columns like created_date)
         query = "SELECT " + ', '.join(column_names) + " FROM job_description WHERE 1=1"
         params = []
         for column in filter_columns:
@@ -119,7 +124,20 @@ def main():
 
     if data:
         df = pd.DataFrame(data, columns=column_names)
+        
+        # Add created_date column from created_at (extract date part only)
+        # created_date is a computed column, not in database - users can select it separately from created_at
+        if 'created_at' in df.columns and 'created_date' not in df.columns:
+            # Extract date part from datetime string (format: YYYY-MM-DD HH:MM:SS -> YYYY-MM-DD)
+            created_date_values = df['created_at'].apply(lambda x: str(x).split(' ')[0] if x and pd.notna(x) and str(x).strip() else '')
+            # Insert created_date right after created_at
+            created_at_idx = df.columns.get_loc('created_at')
+            df.insert(created_at_idx + 1, 'created_date', created_date_values)
+        
         display_columns = essential_columns + selected_columns  # Ensure essential columns are always included
+        # created_date is independent - only show if explicitly selected
+        # Filter out created_date if it's not in df yet (shouldn't happen, but safety check)
+        display_columns = [col for col in display_columns if col in df.columns]
         df = df[display_columns]
         df.insert(0, "Select", False)
         edited_df = st.data_editor(
