@@ -1,0 +1,26 @@
+[
+  {
+    "job_company": "Aurora Tech Solutions",
+    "job_title": "Frontend Engineer",
+    "job_description": "Design and implement user interfaces using React and TypeScript. Collaborate with UX designers to create responsive, accessible web applications.",
+    "job_application_url": "https://careers.auroratech.com/apply/frontend-engineer"
+  },
+  {
+    "job_company": "GreenWave Energy",
+    "job_title": "Data Analyst",
+    "job_description": "Analyze large datasets to uncover trends and insights. Build dashboards and reports in Tableau and Power BI to inform strategic decisions.",
+    "job_application_url": "https://greenwave-energy.com/careers/data-analyst"
+  },
+  {
+    "job_company": "Lumina Healthcare",
+    "job_title": "DevOps Engineer",
+    "job_description": "Automate infrastructure deployment using Terraform and Kubernetes. Monitor system health and implement CI/CD pipelines.",
+    "job_application_url": "https://jobs.luminahc.org/positions/devops-engineer"
+  },
+  {
+    "job_company": "NovaFin Capital",
+    "job_title": "Quantitative Researcher",
+    "job_description": "Develop and backtest trading algorithms using Python and C++. Collaborate with traders to optimize strategies based on statistical models.",
+    "job_application_url": "https://novafincapital.com/jobs/quant-researcher"
+  }
+]
