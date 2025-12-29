@@ -67,13 +67,21 @@ def main():
                 columns = ', '.join(data.keys())
                 placeholders = ', '.join(['?'] * len(data))
                 cursor.execute(f'INSERT INTO uploads ({columns}) VALUES ({placeholders})', list(data.values()))
+                # get sql id
+                new_id = cursor.lastrowid
+                # add sql id to resume
+                extracted_data['id'] = new_id
                 # Add to resumes_to_insert for embedding
                 resumes_to_insert.append(extracted_data)
             else:
                 update_columns = ', '.join([f"{key} = ?" for key in data.keys()])
                 cursor.execute(f'UPDATE uploads SET {update_columns} WHERE file_name = ?', list(data.values()) + [uploaded_resume.name])
                 # For update, also embed/insert (Milvus will deduplicate by content)
+                cursor.execute("SELECT id FROM uploads WHERE file_name = ?", (uploaded_resume.name,))
+                existing_id = cursor.fetchone()[0]
+                extracted_data['id'] = existing_id
                 resumes_to_insert.append(extracted_data)
+                
         connection.commit()
         # Insert new/updated resumes into Milvus
         if resumes_to_insert:
