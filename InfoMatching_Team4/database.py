@@ -25,9 +25,9 @@ cursor.execute('''
 # ''')
 
 #SIMULATION - existing data
-student_name = "John Doe"
-file_name = "example.txt" # change to your testing file name
-file_path = "uploads/example.txt" # change to your testing file path
+# student_name = "John Doe"
+# file_name = "example.txt" # change to your testing file name
+# file_path = "uploads/example.txt" # change to your testing file path
 
 # insert data into table 1
 # if new resume uploaded, update the existing record (only one record in the table for all the time)
@@ -40,7 +40,7 @@ file_path = "uploads/example.txt" # change to your testing file path
 #         uploaded_at = CURRENT_TIMESTAMP
 # ''', (file_name, file_path))
 # cursor.execute("INSERT INTO uploads (student_name, file_name, file_path) VALUES (?, ?, ?)", (student_name, file_name, file_path))
-cursor.execute("INSERT INTO uploads (file_name, file_path) VALUES (?, ?)", (file_name, file_path))
+# cursor.execute("INSERT INTO uploads (file_name, file_path) VALUES (?, ?)", (file_name, file_path))
 
 
 # table 2: job description
@@ -70,23 +70,23 @@ cursor.execute('''
 #     )
 # ''')
 #SIMULATION - existing data 
-job_company = "Google" 
-job_title = "Software Engineer" 
-job_description = "We are looking for a software engineer to join our team. The ideal candidate will have experience in software development and threat intelligence." 
-job_application_url = "https://www.google.com/about/careers/applications/jobs/results/93187212962603718-software-engineer-google-threat-intelligence" 
-cursor.execute("INSERT INTO job_description (job_company, job_title, job_description, job_application_url) VALUES (?, ?, ?, ?)", (job_company, job_title, job_description, job_application_url))
+# job_company = "Google" 
+# job_title = "Software Engineer" 
+# job_description = "We are looking for a software engineer to join our team. The ideal candidate will have experience in software development and threat intelligence." 
+# job_application_url = "https://www.google.com/about/careers/applications/jobs/results/93187212962603718-software-engineer-google-threat-intelligence" 
+# cursor.execute("INSERT INTO job_description (job_company, job_title, job_description, job_application_url) VALUES (?, ?, ?, ?)", (job_company, job_title, job_description, job_application_url))
 
-job_company = "Microsoft" 
-job_title = "Software Engineer - AI/ML" 
-job_description = "You will develop software, tools, and code to be used in support of design, infrastructure, and technology platforms including large and small language models (LLMs/SLMs)." 
-job_application_url = "https://jobs.careers.microsoft.com/global/en/share/1798164/?utm_source=Job Share&utm_campaign=Copy-job-share" 
-cursor.execute("INSERT INTO job_description (job_company, job_title, job_description, job_application_url) VALUES (?, ?, ?, ?)", (job_company, job_title, job_description, job_application_url))
+# job_company = "Microsoft" 
+# job_title = "Software Engineer - AI/ML" 
+# job_description = "You will develop software, tools, and code to be used in support of design, infrastructure, and technology platforms including large and small language models (LLMs/SLMs)." 
+# job_application_url = "https://jobs.careers.microsoft.com/global/en/share/1798164/?utm_source=Job Share&utm_campaign=Copy-job-share" 
+# cursor.execute("INSERT INTO job_description (job_company, job_title, job_description, job_application_url) VALUES (?, ?, ?, ?)", (job_company, job_title, job_description, job_application_url))
 
-job_company = "Meta"
-job_title = "Software Engineer, Infrastructure"
-job_description = "Meta is seeking experienced full-stack Software Engineers to join our product teams."
-job_application_url = "https://www.metacareers.com/jobs/804955741151464/"
-cursor.execute("INSERT INTO job_description (job_company, job_title, job_description, job_application_url) VALUES (?, ?, ?, ?)", (job_company, job_title, job_description, job_application_url))
+# job_company = "Meta"
+# job_title = "Software Engineer, Infrastructure"
+# job_description = "Meta is seeking experienced full-stack Software Engineers to join our product teams."
+# job_application_url = "https://www.metacareers.com/jobs/804955741151464/"
+# cursor.execute("INSERT INTO job_description (job_company, job_title, job_description, job_application_url) VALUES (?, ?, ?, ?)", (job_company, job_title, job_description, job_application_url))
 
 
 # # table 3: job matching result
