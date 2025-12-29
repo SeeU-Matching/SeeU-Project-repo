@@ -215,11 +215,6 @@ def match_resumes_to_jobs(
     match_to_csv(results, csv_path=csv_path)
 
 
-CS_GROUP = ["computer science", "software engineering", "software engineer"]
-REAL_ESTATE_GROUP = ["real estate"]
-INTERN_GROUP = ['intern']
-THRESHOLD = 1.0
-
 def match_new_resumes_to_jobs(new_resumes, model_name="bge-m3", csv_path="search_results.csv"):
     connect_milvus()
     from pymilvus import Collection, utility
@@ -239,60 +234,22 @@ def match_new_resumes_to_jobs(new_resumes, model_name="bge-m3", csv_path="search
     if isinstance(embeddings, list) and len(embeddings) > 0 and isinstance(embeddings[0], float):
         embeddings = [embeddings]
     names = [resume.get("name", "") for resume in new_resumes]
-    print("-------match after uploading resume ------")
-    print(job_df)
-    print(new_resumes)
-    print("-------match after uploading resume ------")
-
-    # label
-    resume_major_preference = []
-    for resume in new_resumes:
-        majors = resume.get("major", " ")
-        labels = set()
-        for major in majors:
-            major = major.lower()
-            if any(k in major for k in CS_GROUP):
-                labels.add("CS")
-            if any(k in major for k in REAL_ESTATE_GROUP):
-                labels.add("REAL_STATE")
-        resume_major_preference.append(list(labels))
-            
-            
-    jd_major_preference = []
-    for title in job_df['job_title'].tolist():
-        title = title.lower()
-        labels = []
-        if any(k in title for k in CS_GROUP):
-            labels.append("CS")
-        if any(k in title for k in REAL_ESTATE_GROUP):
-            labels.append("REAL_STATE")
-        jd_major_preference.append(labels)
-    
-    print(resume_major_preference)
-    print(jd_major_preference)
-    
 
     import numpy as np
     from sklearn.metrics.pairwise import euclidean_distances
     job_embs = np.vstack(job_df["embedding"].tolist())
     results = []
+
     for i, (embedding, name) in enumerate(zip(embeddings, names)):
-        resume_labels = set(resume_major_preference[i])
+        dists = euclidean_distances([embedding], job_embs)[0]
         for j, job_row in job_df.iterrows():
-            job_labels = set(jd_major_preference[j])
-            if resume_labels and job_labels and resume_labels.isdisjoint(job_labels):
-                continue
-            dists = euclidean_distances([embedding], [job_embs[j]])[0][0]
-            # matching score threshold
-            if dists > THRESHOLD:
-                continue
             results.append({
                 "name": name,
                 "job_id": job_row["job_id"],
                 "job_company": job_row["job_company"],
                 "job_title": job_row["job_title"],
                 "job_application_url": job_row["job_application_url"],
-                "distance": dists
+                "distance": dists[j]
             })
     match_to_csv(results, csv_path=csv_path)
 
