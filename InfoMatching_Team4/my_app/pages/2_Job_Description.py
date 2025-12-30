@@ -10,7 +10,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../.
 from jd_function import extract_job_data
 # Import Milvus embedding/insert function
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../InfoMatching_Team1')))
-from matching_utils import insert_job_descriptions
+from matching_utils import insert_job_descriptions, deleteJDById
 
 
 def sanitize_column_name(name):
@@ -108,7 +108,7 @@ def main():
     
     with st.sidebar:
         st.header("Filters")
-        essential_columns = ['job_company', 'job_title']
+        essential_columns = ['job_company', 'job_title', 'id']
         filter_columns = [col for col in column_names if col not in ['job_application_url']]
         selectable_columns = [col for col in filter_columns if col not in essential_columns]
         # Add created_date to selectable_columns if created_at exists (for independent selection)
@@ -156,7 +156,7 @@ def main():
             },
             hide_index=True
         )
-        selected_files = [f"{row['job_company']}: {row['job_title']}" for _, row in edited_df.iterrows() if row["Select"]]
+        selected_files = [f"{row['id']}: {row['job_company']}: {row['job_title']}" for _, row in edited_df.iterrows() if row["Select"]]
         st.write("Selected Jobs:", selected_files)
         if "confirm_delete" not in st.session_state:
             st.session_state.confirm_delete = False
@@ -173,8 +173,10 @@ def main():
                 connection = sqlite3.connect(db_path)
                 cursor = connection.cursor()
                 for job in st.session_state.jobs_to_delete:
-                    company, title = job.split(": ", 1)
-                    cursor.execute("DELETE FROM job_description WHERE job_company = ? AND job_title = ?", (company, title))
+                    id_str, company, title = job.split(": ", 2)
+                    id = int(id_str)
+                    cursor.execute("DELETE FROM job_description WHERE id = ?", (id, ))
+                    deleteJDById(id)
                 connection.commit()
                 connection.close()
                 st.success("Selected job descriptions deleted successfully!")

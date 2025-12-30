@@ -10,7 +10,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../.
 from resume_interface import read_resume
 # Import Milvus embedding/insert function
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../InfoMatching_Team1')))
-from matching_utils import insert_resumes
+from matching_utils import insert_resumes, deleteResumeById
 
 def sanitize_column_name(name):
     return re.sub(r'\W|^(?=\d)', '_', name).lower()
@@ -107,7 +107,7 @@ def main():
     
     with st.sidebar:
         st.header("Filters")
-        essential_columns = ['url','file_name']
+        essential_columns = ['url','file_name', 'id']
         filter_columns = [col for col in column_names if col not in ['file_path']]
         selectable_columns = [col for col in filter_columns if col not in essential_columns]
         selected_columns = st.multiselect("Display columns", options=selectable_columns, default=selectable_columns if selectable_columns else [])
@@ -139,24 +139,25 @@ def main():
             },
             hide_index=True
         )
-        selected_files = edited_df[edited_df["Select"] == True]["file_name"].tolist()
-        st.write("Selected Files:", selected_files)
+        selected_ids = edited_df[edited_df["Select"] == True]["id"].tolist()
+        st.write("Selected IDs:", selected_ids)
         if "confirm_delete" not in st.session_state:
             st.session_state.confirm_delete = False
         if "files_to_delete" not in st.session_state:
             st.session_state.files_to_delete = []
         if st.button("Delete Selected"):
-            if selected_files:
+            if selected_ids:
                 st.session_state.confirm_delete = True
-                st.session_state.files_to_delete = selected_files
+                st.session_state.files_to_delete = selected_ids
                 st.rerun()
         if st.session_state.confirm_delete:
             st.warning("Are you sure you want to delete the selected files?")
             if st.button("Confirm Delete"):
                 connection = sqlite3.connect(db_path)
                 cursor = connection.cursor()
-                for file_name in st.session_state.files_to_delete:
-                    cursor.execute("DELETE FROM uploads WHERE file_name = ?", (file_name,))
+                for id in st.session_state.files_to_delete:
+                    cursor.execute("DELETE FROM uploads WHERE id = ?", (id,))
+                    deleteResumeById(id)
                 connection.commit()
                 connection.close()
                 st.success("Selected files deleted successfully!")
