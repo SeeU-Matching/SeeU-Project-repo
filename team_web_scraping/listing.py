@@ -3,17 +3,6 @@ import requests
 from bs4 import BeautifulSoup
 import re
 
-# ------------------------------------------------------------
-# Helper: calculate LinkedIn f_TPR param (last 30 days)
-# ------------------------------------------------------------
-
-def _last_30_days_param() -> str:
-    today = datetime.date.today()
-    first_of_this_month = today.replace(day=1)
-    last_month_last_day = first_of_this_month - datetime.timedelta(days=1)
-    seconds = (today - last_month_last_day.replace(day=1)).days * 24 * 3600
-    return f"r{seconds}"
-
 def fetch_job_listing_urls(job_title: str, location: str, pages: int = 1) -> list[dict]:
     """Return a list of dictionaries with keys:
     job_id, url, title, company, location
@@ -34,7 +23,8 @@ def fetch_job_listing_urls(job_title: str, location: str, pages: int = 1) -> lis
             "keywords": job_title,
             "location": location,
             "start": page * 25,
-            "f_TPR": _last_30_days_param(),  # last‑30‑days filter
+            "f_TPR": "r86400",  # last 24h filter
+            "f_E": "1,2,3",  # experience levels: internship, entry, associate
         }
 
         resp = requests.get(base_url, params=params, headers=headers, timeout=10)
