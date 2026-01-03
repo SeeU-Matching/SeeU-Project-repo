@@ -1,3 +1,6 @@
+import time
+import os
+import atexit
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
@@ -5,12 +8,17 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
-import time
-import os
+
 
 class SeleniumJobScraper:
-    def __init__(self, headless: bool = True):
-        chromedriver_path = "/Users/christang/Desktop/jd_fetching/chromedriver"
+    def __init__(self, headless: bool = True, chromedriver_path: str | None = None, user_data_dir: str | None = None):
+        # Allow overriding via args or environment variables
+        chromedriver_path = chromedriver_path or os.environ.get("SELENIUM_CHROMEDRIVER_PATH")
+        user_data_dir = user_data_dir or os.environ.get("SELENIUM_USER_DATA_DIR")
+
+        if not chromedriver_path:
+            raise ValueError("chromedriver_path must be provided either as arg or in SELENIUM_CHROMEDRIVER_PATH")
+
         opts = Options()
         if headless:
             opts.add_argument("--headless=new")
@@ -19,10 +27,25 @@ class SeleniumJobScraper:
         opts.add_argument("--disable-gpu")
         opts.add_argument("--window-size=1920,1080")
 
-        # ✅ Use dedicated Chrome user data directory to avoid conflict
-        opts.add_argument("--user-data-dir=/Users/christang/Desktop/jd_fetching/chrome_user_data")
+        if user_data_dir:
+            opts.add_argument(fr"--user-data-dir={user_data_dir}")
 
         self.driver = webdriver.Chrome(service=Service(chromedriver_path), options=opts)
+
+        # Ensure driver quits on process exit to avoid orphaned browsers
+        atexit.register(self._atexit_quit)
+
+    def _atexit_quit(self):
+        try:
+            self.driver.quit()
+        except Exception:
+            pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self.close()
 
     def fetch_detail(
         self, url: str, timeout: int = 12
@@ -71,19 +94,22 @@ class SeleniumJobScraper:
         # ───────────────────────── apply URL ───────────────────────────
         apply_link = ""
 
+        # capture original window/url for fallbacks
+        original_window = d.current_window_handle
+        original_url = d.current_url
+        
         # ❶  ONLY the absolute XPath you trust
         APPLY_LOCATOR = (
             By.XPATH,
             "/html/body/div[6]/div[3]/div[2]/div/div/main/div[2]/div[1]/div/div[1]/"
             "div/div/div/div[6]/div/div/div/button",
+            # "/html/body/main/section[1]/div/section[2]/div/div[1]/div/div/button",
         )
 
         try:
             btn = WebDriverWait(d, timeout).until(
                 EC.element_to_be_clickable(APPLY_LOCATOR)
             )
-            original_window = d.current_window_handle
-            original_url    = d.current_url
             d.execute_script("arguments[0].click();", btn)
             time.sleep(2)
 
@@ -112,6 +138,50 @@ class SeleniumJobScraper:
             shot = f"apply_button_fail_{ts}.png"
             d.save_screenshot(shot)
             print(f"⚠️  Could not fetch apply URL: {e} – screenshot {shot}")
+
+        # # ───────────────────────── Fallbacks for apply URL ─────────────────────────
+        # if not apply_link:
+        #     try:
+        #         # 1) common anchor hrefs mentioning 'apply'
+        #         anchors = d.find_elements(
+        #             By.XPATH,
+        #             "//a[@href and (contains(translate(@href,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'apply') "
+        #             "or contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'apply'))]"
+        #         )
+        #         for a in anchors:
+        #             href = a.get_attribute("href")
+        #             if href and href.startswith("http"):
+        #                 apply_link = href
+        #                 break
+
+        #         # 2) buttons/links with apply-like attributes (aria-label / data-control-name / common classes)
+        #         if not apply_link:
+        #             candidate = d.find_elements(
+        #                 By.XPATH,
+        #                 "//*[contains(translate(@aria-label,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'apply') "
+        #                 "or contains(translate(@class,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'apply') "
+        #                 "or contains(translate(@data-control-name,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'apply')]"
+        #             )
+        #             if candidate:
+        #                 el = candidate[0]
+        #                 try:
+        #                     d.execute_script("arguments[0].click();", el)
+        #                     time.sleep(1)
+        #                     new_tabs = [w for w in d.window_handles if w != original_window]
+        #                     if new_tabs:
+        #                         d.switch_to.window(new_tabs[0])
+        #                         apply_link = d.current_url
+        #                         d.close()
+        #                         d.switch_to.window(original_window)
+        #                     elif d.current_url != original_url:
+        #                         apply_link = d.current_url
+        #                 except Exception:
+        #                     # if click fails, try to read href attribute
+        #                     href = el.get_attribute("href")
+        #                     if href and href.startswith("http"):
+        #                         apply_link = href
+        #     except Exception as fb:
+        #         print("Fallback apply-url detection failed:", fb)
 
         # ───────────────────────── industry (optional) ─────────────────
         try:
