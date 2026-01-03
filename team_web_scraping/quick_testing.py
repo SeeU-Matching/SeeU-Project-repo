@@ -1,5 +1,5 @@
 # quick_test.py
-from scraper import SeleniumJobScraper
+from .scraper import SeleniumJobScraper
 
 url = "https://www.linkedin.com/jobs/view/bi-analyst-at-burberry-4239658831/?originalSubdomain=cn"
 scraper = SeleniumJobScraper(headless=True)   # False so you can see what happens
