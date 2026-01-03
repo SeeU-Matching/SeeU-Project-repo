@@ -89,6 +89,7 @@ def main():
         return
 
     df = pd.read_csv(csv_path)
+    df = df.drop_duplicates(subset=["name", "job_id", "job_application_url"], keep="last").reset_index(drop=True)
 
     if student_name and "name" in df.columns:
         df = df[df["name"].astype(str).str.contains(student_name, case=False, na=False)]
@@ -99,8 +100,7 @@ def main():
 
     # LLM rating controls
     st.caption("Optional: Use ChatGPT (OpenAI API) to rate match quality (High/Medium/Low) based on resume experience vs JD text.")
-    top_n = st.slider("Rate top N rows (cost control)", 1, min(50, len(df)), min(20, len(df)))
-    run_rating = st.button("Compute LLM Fit (ChatGPT) for top N")
+    run_rating = st.button("Compute LLM Fit (ChatGPT) for ALL matches")
 
     if "llm_cache" not in st.session_state:
         st.session_state["llm_cache"] = {}
@@ -116,8 +116,8 @@ def main():
                 conn = sqlite3.connect(db_path)
                 cur = conn.cursor()
 
-                df_top = df.head(top_n).copy()
-                ratings, reasons, confs = [], [], []
+                df_top = df.copy()
+                ratings, confs = [], []
 
                 for _, row in df_top.iterrows():
                     sname = str(row["name"]).strip()
@@ -125,14 +125,12 @@ def main():
                         jid = int(row["job_id"])
                     except Exception:
                         ratings.append("Medium")
-                        reasons.append("Invalid job_id")
                         confs.append(0.0)
                         continue
 
                     resume_id = get_latest_resume_id_by_name(cur, sname)
                     if resume_id is None:
                         ratings.append("Medium")
-                        reasons.append("No resume found for this name")
                         confs.append(0.0)
                         continue
 
@@ -141,23 +139,23 @@ def main():
 
                     if not resume_text or not jd_text:
                         ratings.append("Medium")
-                        reasons.append("Missing resume/JD text")
                         confs.append(0.0)
                         continue
 
                     out = rate_fit(resume_text, jd_text, cache=st.session_state["llm_cache"])
                     ratings.append(out["rating"])
-                    reasons.append("; ".join(out["reasons"]))
-                    confs.append(out["confidence"])
+                    try:
+                        confs.append(round(float(out["confidence"]), 3))  # <-- 3 decimal
+                    except Exception:
+                        confs.append(0.000)
 
                 conn.close()
 
-                for col in [LLM_COL, "LLM Reasons", "LLM Confidence"]:
+                for col in [LLM_COL, "LLM Confidence"]:
                     if col not in df.columns:
                         df[col] = ""
 
                 df.loc[df_top.index, LLM_COL] = ratings
-                df.loc[df_top.index, "LLM Reasons"] = reasons
                 df.loc[df_top.index, "LLM Confidence"] = confs
 
     st.dataframe(df, use_container_width=True)
