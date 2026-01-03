@@ -144,21 +144,17 @@ def match_to_csv(matching, csv_path="search_results.csv"):
     if not matching:
         print("No matching result to save.")
         return
+
     headers = ["Index", "name", "job_id", "job_company", "job_title", "job_application_url", "distance"]
-    import os
-    file_exists = os.path.exists(csv_path)
+
     try:
-        # Sort by distance (ascending: best matches first)
-        matching_sorted = sorted(matching, key=lambda x: x.get("distance", float('inf')))
-        with open(csv_path, mode="a", newline="", encoding="utf-8") as csv_file:
+        matching_sorted = sorted(matching, key=lambda x: x.get("distance", float("inf")))
+        with open(csv_path, mode="w", newline="", encoding="utf-8") as csv_file:
             writer = csv.DictWriter(csv_file, fieldnames=headers)
-            # Only write header if file does not exist or is empty
-            if not file_exists or os.stat(csv_path).st_size == 0:
-                writer.writeheader()
+            writer.writeheader()
             for idx, row in enumerate(matching_sorted, start=1):
-                row_i = {"Index": idx, **row}
-                writer.writerow(row_i)
-        print(f"Matching results appended to '{csv_path}'.")
+                writer.writerow({"Index": idx, **row})
+        print(f"Matching results written to '{csv_path}'.")
     except Exception as e:
         print(f"Failed to save CSV: {e}")
 
