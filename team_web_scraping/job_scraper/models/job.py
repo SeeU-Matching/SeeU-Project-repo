@@ -1,5 +1,6 @@
+from typing import Optional
 from pydantic import BaseModel, Field
-from typing import Optional, List
+
 
 class JobSearchRequest(BaseModel):
     job_title: str = Field(...)
@@ -16,3 +17,10 @@ class JobResult(BaseModel):
     job_url: str
     apply_url: str
     industry: Optional[str]
+
+class JobDetail(BaseModel):
+    description: str = ""
+    apply_url: str = ""
+    industry: Optional[str] = None
+    title: str = ""
+    company: str = ""

@@ -1,6 +1,7 @@
 import time
 import os
 import atexit
+from typing import List, Dict
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
@@ -8,16 +9,20 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
-
+from ..models.job import JobDetail, JobResult
 
 class SeleniumJobScraper:
-    def __init__(self, headless: bool = True, chromedriver_path: str | None = None, user_data_dir: str | None = None):
+    def __init__(self,
+                 headless: bool = True,
+                 chromedriver_path: str | None = None,
+                 user_data_dir: str | None = None):
         # Allow overriding via args or environment variables
         chromedriver_path = chromedriver_path or os.environ.get("SELENIUM_CHROMEDRIVER_PATH")
         user_data_dir = user_data_dir or os.environ.get("SELENIUM_USER_DATA_DIR")
 
         if not chromedriver_path:
-            raise ValueError("chromedriver_path must be provided either as arg or in SELENIUM_CHROMEDRIVER_PATH")
+            raise ValueError("chromedriver_path must be provided either \
+                              as arg or in SELENIUM_CHROMEDRIVER_PATH")
 
         opts = Options()
         if headless:
@@ -47,9 +52,55 @@ class SeleniumJobScraper:
     def __exit__(self, exc_type, exc, tb):
         self.close()
 
-    def fetch_detail(
-        self, url: str, timeout: int = 12
-    ) -> tuple[str, str, str | None, str, str]:
+    def fetch_details(self, listings: List[Dict[str, str]]) -> List[JobResult]:
+        """
+        Fetch detailed information for each job listing.
+        
+        Args:
+            listings: List of job listings from get_listings()
+            
+        Returns:
+            List of job dictionaries with full details added
+        """
+        results = []
+
+        for listing in listings:
+            url = listing.get("url")
+            if not url:
+                continue
+
+            job_detail = self._fetch_job_detail(url)
+
+            job_data = {
+                **listing,
+                "description": job_detail.description,
+                "apply_url": job_detail.apply_url,
+                "industry": job_detail.industry,
+            }
+
+            # Use detailed title/company if available and different
+            if job_detail.title and job_detail.title != listing.get("title"):
+                job_data["title"] = job_detail.title
+            if job_detail.company and job_detail.company != listing.get("company"):
+                job_data["company"] = job_detail.company
+
+            job_result = JobResult(
+                title=job_data.get("title"),
+                company=job_data.get("company"),
+                location=job_data.get("location"),
+                description=job_data.get("description"),
+                apply_url=job_data.get("apply_url"),
+                industry=job_data.get("industry"),
+                job_url="" if job_data.get("job_id") == "" \
+                    else f"https://www.linkedin.com/jobs/view/{job_data.get("job_id")}"
+            )
+            results.append(job_result)
+
+        return results
+
+    def _fetch_job_detail(
+        self, url: str, timeout: int = 5
+    ) -> JobDetail:
         d = self.driver
         d.get(url)
         print(">>> Navigated to:", url)
@@ -97,7 +148,7 @@ class SeleniumJobScraper:
         # capture original window/url for fallbacks
         original_window = d.current_window_handle
         original_url = d.current_url
-        
+
         # ❶  ONLY the absolute XPath you trust
         APPLY_LOCATOR = (
             By.XPATH,
@@ -139,50 +190,6 @@ class SeleniumJobScraper:
             d.save_screenshot(shot)
             print(f"⚠️  Could not fetch apply URL: {e} – screenshot {shot}")
 
-        # # ───────────────────────── Fallbacks for apply URL ─────────────────────────
-        # if not apply_link:
-        #     try:
-        #         # 1) common anchor hrefs mentioning 'apply'
-        #         anchors = d.find_elements(
-        #             By.XPATH,
-        #             "//a[@href and (contains(translate(@href,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'apply') "
-        #             "or contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'apply'))]"
-        #         )
-        #         for a in anchors:
-        #             href = a.get_attribute("href")
-        #             if href and href.startswith("http"):
-        #                 apply_link = href
-        #                 break
-
-        #         # 2) buttons/links with apply-like attributes (aria-label / data-control-name / common classes)
-        #         if not apply_link:
-        #             candidate = d.find_elements(
-        #                 By.XPATH,
-        #                 "//*[contains(translate(@aria-label,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'apply') "
-        #                 "or contains(translate(@class,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'apply') "
-        #                 "or contains(translate(@data-control-name,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'apply')]"
-        #             )
-        #             if candidate:
-        #                 el = candidate[0]
-        #                 try:
-        #                     d.execute_script("arguments[0].click();", el)
-        #                     time.sleep(1)
-        #                     new_tabs = [w for w in d.window_handles if w != original_window]
-        #                     if new_tabs:
-        #                         d.switch_to.window(new_tabs[0])
-        #                         apply_link = d.current_url
-        #                         d.close()
-        #                         d.switch_to.window(original_window)
-        #                     elif d.current_url != original_url:
-        #                         apply_link = d.current_url
-        #                 except Exception:
-        #                     # if click fails, try to read href attribute
-        #                     href = el.get_attribute("href")
-        #                     if href and href.startswith("http"):
-        #                         apply_link = href
-        #     except Exception as fb:
-        #         print("Fallback apply-url detection failed:", fb)
-
         # ───────────────────────── industry (optional) ─────────────────
         try:
             industry = d.find_element(
@@ -192,8 +199,13 @@ class SeleniumJobScraper:
         except Exception:
             industry = None
 
-        return description, apply_link, industry, title, company
-
+        return JobDetail(
+            description=description,
+            apply_url=apply_link,
+            industry=industry,
+            title=title,
+            company=company
+        )
 
     def close(self):
         self.driver.quit()
