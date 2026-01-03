@@ -9,6 +9,7 @@ import os
 from typing import List, Dict, Optional
 import csv
 import time, traceback
+import sqlite3
 
 # Model config
 MODEL = {
@@ -82,11 +83,11 @@ def insert_job_descriptions(job_postings: List[Dict], model_name="bge-m3", colle
     connect_milvus()
     dim = MODEL[model_name]["dim"]
     fields = [
-        FieldSchema(name="job_id", dtype=DataType.INT64, is_primary=True, auto_id=True),
+        FieldSchema(name="sql_id", dtype=DataType.INT64, is_primary=True),
         FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=dim),
         FieldSchema(name="job_company", dtype=DataType.VARCHAR, max_length=200),
         FieldSchema(name="job_title", dtype=DataType.VARCHAR, max_length=200),
-        FieldSchema(name="job_application_url", dtype=DataType.VARCHAR, max_length=500)
+        FieldSchema(name="job_application_url", dtype=DataType.VARCHAR, max_length=500),
     ]
     collection = create_or_load_collection(collection_name, dim, fields)
     texts = [f"{job['job_company']} {job['job_title']} {job['job_description']}" for job in job_postings]
@@ -94,11 +95,13 @@ def insert_job_descriptions(job_postings: List[Dict], model_name="bge-m3", colle
     job_companies = [job["job_company"] for job in job_postings]
     job_titles = [job["job_title"] for job in job_postings]
     job_urls = [job["job_application_url"] for job in job_postings]
+    sql_id = [job.get("id", 0) for job in job_postings]
     collection.insert([
+        sql_id,
         embeddings,
         job_companies,
         job_titles,
-        job_urls
+        job_urls,
     ])
     collection.flush()
     print(f"Inserted {len(job_postings)} job_postings into collection '{collection_name}'.")
@@ -109,11 +112,11 @@ def insert_resumes(resumes: List[Dict], model_name="bge-m3", collection_name="re
     connect_milvus()
     dim = MODEL[model_name]["dim"]
     fields = [
-        FieldSchema(name="resume_id", dtype=DataType.INT64, is_primary=True, auto_id=True),
+        FieldSchema(name="sql_id", dtype=DataType.INT64,  is_primary=True),
         FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=dim),
         FieldSchema(name="name", dtype=DataType.VARCHAR, max_length=200),
         FieldSchema(name="email", dtype=DataType.VARCHAR, max_length=200),
-        FieldSchema(name="phone", dtype=DataType.VARCHAR, max_length=100)
+        FieldSchema(name="phone", dtype=DataType.VARCHAR, max_length=100),
     ]
     collection = create_or_load_collection(collection_name, dim, fields)
     texts = [f"{resume.get('name', '')} {resume.get('major', '')} {resume.get('tech_skills', '')} {resume.get('experiences', '')}" for resume in resumes]
@@ -124,11 +127,14 @@ def insert_resumes(resumes: List[Dict], model_name="bge-m3", collection_name="re
     names = [resume.get("name", "") for resume in resumes]
     emails = [resume.get("email", "") for resume in resumes]
     phones = [resume.get("phone", "") for resume in resumes]
+    sql_id = [resume.get("id", 0) for resume in resumes]
     collection.insert([
+        sql_id,
         embeddings,
         names,
         emails,
-        phones
+        phones,
+        
     ])
     collection.flush()
     print(f"Inserted {len(resumes)} resumes into collection '{collection_name}'.")
@@ -138,20 +144,23 @@ def match_to_csv(matching, csv_path="search_results.csv"):
     if not matching:
         print("No matching result to save.")
         return
-
     headers = ["Index", "name", "job_id", "job_company", "job_title", "job_application_url", "distance"]
-
+    import os
+    file_exists = os.path.exists(csv_path)
     try:
-        matching_sorted = sorted(matching, key=lambda x: x.get("distance", float("inf")))
-        with open(csv_path, mode="w", newline="", encoding="utf-8") as csv_file:
+        # Sort by distance (ascending: best matches first)
+        matching_sorted = sorted(matching, key=lambda x: x.get("distance", float('inf')))
+        with open(csv_path, mode="a", newline="", encoding="utf-8") as csv_file:
             writer = csv.DictWriter(csv_file, fieldnames=headers)
-            writer.writeheader()
+            # Only write header if file does not exist or is empty
+            if not file_exists or os.stat(csv_path).st_size == 0:
+                writer.writeheader()
             for idx, row in enumerate(matching_sorted, start=1):
-                writer.writerow({"Index": idx, **row})
-        print(f"Matching results written to '{csv_path}'.")
+                row_i = {"Index": idx, **row}
+                writer.writerow(row_i)
+        print(f"Matching results appended to '{csv_path}'.")
     except Exception as e:
         print(f"Failed to save CSV: {e}")
-
 
 
 def match_resumes_to_jobs(
@@ -171,12 +180,8 @@ def match_resumes_to_jobs(
     resume_col.load()
     job_col.load()
     # Get all resume embeddings and info
-    resume_df = pd.DataFrame(resume_col.query(expr="resume_id >= 0", output_fields=["resume_id", "embedding", "name", "email", "phone"]))
-    print("-----resume match------")
-    print(resume_df)
-    job_df = pd.DataFrame(job_col.query(expr="job_id >= 0", output_fields=["job_id", "embedding", "job_company", "job_title", "job_application_url"]))
-    print(job_df)
-    print("-----resume match------")
+    resume_df = pd.DataFrame(resume_col.query(expr="sql_id >= 0", output_fields=["sql_id", "embedding", "name", "email", "phone"]))
+    job_df = pd.DataFrame(job_col.query(expr="sql_id >= 0", output_fields=["sql_id", "embedding", "job_company", "job_title", "job_application_url"]))
 
     # Compute all-pairs similarity (L2 distance)
     from sklearn.metrics.pairwise import euclidean_distances
@@ -191,7 +196,7 @@ def match_resumes_to_jobs(
             score = dists[i, j]
             results.append({
                 "name": resume_row["name"],
-                "job_id": job_row["job_id"],
+                "job_id": job_row["sql_id"],
                 "job_company": job_row["job_company"],
                 "job_title": job_row["job_title"],
                 "job_application_url": job_row["job_application_url"],
@@ -212,11 +217,6 @@ def match_resumes_to_jobs(
     match_to_csv(results, csv_path=csv_path)
 
 
-CS_GROUP = ["computer science", "software engineering", "software engineer"]
-REAL_ESTATE_GROUP = ["real estate"]
-INTERN_GROUP = ['intern']
-THRESHOLD = 1.0
-
 def match_new_resumes_to_jobs(new_resumes, model_name="bge-m3", csv_path="search_results.csv"):
     connect_milvus()
     from pymilvus import Collection, utility
@@ -225,10 +225,28 @@ def match_new_resumes_to_jobs(new_resumes, model_name="bge-m3", csv_path="search
         return
     job_col = Collection("job_postings")
     job_col.load()
-    job_df = pd.DataFrame(job_col.query(expr="job_id >= 0", output_fields=["job_id", "embedding", "job_company", "job_title", "job_application_url"]))
+    job_df = pd.DataFrame(job_col.query(expr="sql_id >= 0", output_fields=["sql_id", "embedding", "job_company", "job_title", "job_application_url"]))
     if job_df.empty:
         print("No jobs to match.")
         return
+    print("------------------------------")
+    print(job_df)
+    print("------------------------------")
+    # HARD CONSTRAINTS
+    # connect to sqlite
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    db_path = os.path.join(script_dir, "..", "my_database.db")
+    connection = sqlite3.connect(db_path)
+    cursor = connection.cursor()
+    # getch jd content from sql database
+    job_ids = job_df['sql_id'].tolist()
+    placeholders = ', '.join(['?'] * len(job_ids))
+    query = f"SELECT * FROM job_description WHERE id IN ({placeholders})"
+    cursor.execute(query, job_ids)
+    jd_content = cursor.fetchall()
+    print("------------------------------")
+    print(jd_content)
+    print("------------------------------")
     
     # Prepare new resume embeddings
     texts = [f"{resume.get('name', '')} {resume.get('major', '')} {resume.get('tech_skills', '')} {resume.get('experiences', '')}" for resume in new_resumes]
@@ -236,68 +254,27 @@ def match_new_resumes_to_jobs(new_resumes, model_name="bge-m3", csv_path="search
     if isinstance(embeddings, list) and len(embeddings) > 0 and isinstance(embeddings[0], float):
         embeddings = [embeddings]
     names = [resume.get("name", "") for resume in new_resumes]
-    print("-------match after uploading resume ------")
-    print(job_df)
-    print(new_resumes)
-    print("-------match after uploading resume ------")
-
-    # label
-    resume_major_preference = []
-    for resume in new_resumes:
-        majors = resume.get("major", " ")
-        labels = set()
-        for major in majors:
-            major = major.lower()
-            if any(k in major for k in CS_GROUP):
-                labels.add("CS")
-            if any(k in major for k in REAL_ESTATE_GROUP):
-                labels.add("REAL_STATE")
-        resume_major_preference.append(list(labels))
-            
-            
-    jd_major_preference = []
-    for title in job_df['job_title'].tolist():
-        title = title.lower()
-        labels = []
-        if any(k in title for k in CS_GROUP):
-            labels.append("CS")
-        if any(k in title for k in REAL_ESTATE_GROUP):
-            labels.append("REAL_STATE")
-        jd_major_preference.append(labels)
-    
-    print(resume_major_preference)
-    print(jd_major_preference)
-    
 
     import numpy as np
     from sklearn.metrics.pairwise import euclidean_distances
     job_embs = np.vstack(job_df["embedding"].tolist())
     results = []
+
     for i, (embedding, name) in enumerate(zip(embeddings, names)):
-        resume_labels = set(resume_major_preference[i])
+        dists = euclidean_distances([embedding], job_embs)[0]
         for j, job_row in job_df.iterrows():
-            job_labels = set(jd_major_preference[j])
-            if resume_labels and job_labels and resume_labels.isdisjoint(job_labels):
-                continue
-            dists = euclidean_distances([embedding], [job_embs[j]])[0][0]
-            # matching score threshold
-            if dists > THRESHOLD:
-                continue
             results.append({
                 "name": name,
-                "job_id": job_row["job_id"],
+                "job_id": job_row["sql_id"],
                 "job_company": job_row["job_company"],
                 "job_title": job_row["job_title"],
                 "job_application_url": job_row["job_application_url"],
-                "distance": dists
+                "distance": dists[j]
             })
     match_to_csv(results, csv_path=csv_path)
 
 
 def match_all_resumes_to_new_jobs(new_jobs, model_name="bge-m3", csv_path="search_results.csv"):
-    print("-------match after uploading jd ------")
-    print(new_jobs)
-    print("-------match after uploading jd ------")
     connect_milvus()
     from pymilvus import Collection, utility
     if not utility.has_collection("resume"):
@@ -305,17 +282,36 @@ def match_all_resumes_to_new_jobs(new_jobs, model_name="bge-m3", csv_path="searc
         return
     resume_col = Collection("resume")
     resume_col.load()
-    resume_df = pd.DataFrame(resume_col.query(expr="resume_id >= 0", output_fields=["resume_id", "embedding", "name", "email", "phone"]))
+    resume_df = pd.DataFrame(resume_col.query(expr="sql_id >= 0", output_fields=["sql_id", "embedding", "name", "email", "phone"]))
     if resume_df.empty:
         print("No resumes to match.")
         return
+    
+    print("############################")
+    print(resume_df)
+    print("############################")
+    # HARD CONSTRAINTS
+    # connect to sqlite
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    db_path = os.path.join(script_dir, "..", "my_database.db")
+    connection = sqlite3.connect(db_path)
+    cursor = connection.cursor()
+    # getch jd content from sql database
+    resume_ids = resume_df['sql_id'].tolist()
+    placeholders = ', '.join(['?'] * len(resume_ids))
+    query = f"SELECT * FROM uploads WHERE id IN ({placeholders})"
+    cursor.execute(query, resume_ids)
+    resume_content = cursor.fetchall()
+    print("############################")
+    print(resume_content)
+    print("############################")
 
     # Prepare new job embeddings
     texts = [f"{job.get('job_company', '')} {job.get('job_title', '')} {job.get('job_description', '')}" for job in new_jobs]
     embeddings = generate_embeddings(texts, model_name=model_name)
     if isinstance(embeddings, list) and len(embeddings) > 0 and isinstance(embeddings[0], float):
         embeddings = [embeddings]
-    job_infos = [(job.get("job_id", None), job.get("job_company", ""), job.get("job_title", ""), job.get("job_application_url", "")) for job in new_jobs]
+    job_infos = [(job.get("id", None), job.get("job_company", ""), job.get("job_title", ""), job.get("job_application_url", "")) for job in new_jobs]
 
     import numpy as np
     from sklearn.metrics.pairwise import euclidean_distances
@@ -333,3 +329,31 @@ def match_all_resumes_to_new_jobs(new_jobs, model_name="bge-m3", csv_path="searc
                 "distance": dists[j]
             })
     match_to_csv(results, csv_path=csv_path) 
+
+def deleteResumeById(id):
+    connect_milvus()
+    from pymilvus import Collection, utility
+    if not utility.has_collection("resume"):
+        print("No resumes in Milvus.")
+        return
+    resume_col = Collection("resume")
+    resume_col.load()
+    delete_query = f"sql_id in [{id}]"
+    resume_col.delete(delete_query)
+    resume_col.flush()
+    print(f"Successfully deleted resume with ID {id} from Milvus.")
+    return
+
+def deleteJDById(id):
+    connect_milvus()
+    from pymilvus import Collection, utility
+    if not utility.has_collection("job_postings"):
+        print("No JDs in Milvus.")
+        return
+    job_col = Collection("job_postings")
+    job_col.load()
+    delete_query = f"sql_id in [{id}]"
+    job_col.delete(delete_query)
+    job_col.flush()
+    print(f"Successfully deleted jd with ID {id} from Milvus.")
+    return
