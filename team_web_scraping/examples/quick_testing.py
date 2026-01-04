@@ -6,11 +6,11 @@ load_dotenv()
 url = "https://www.linkedin.com/jobs/view/bi-analyst-at-burberry-4239658831/?originalSubdomain=cn"
 scraper = SeleniumJobScraper(headless=True)   # False so you can see what happens
 try:
-    desc, apply_url, industry, title, company = scraper.fetch_detail(url)
-    print("Title:      ", title)
-    print("Company:    ", company)
-    print("Industry:   ", industry)
-    print("Apply link: ", apply_url)
-    print("Description:", desc[:300], "…")
+    job_result = scraper._fetch_job_detail(url)
+    print("Title:      ", job_result.title)
+    print("Company:    ", job_result.company)
+    print("Industry:   ", job_result.industry)
+    print("Apply link: ", job_result.apply_url)
+    print("Description:", job_result.description[:300], "…")
 finally:
     scraper.close()
