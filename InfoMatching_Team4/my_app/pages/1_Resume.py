@@ -5,6 +5,14 @@ import pandas as pd
 import sys
 import re
 
+# Set environment variables early to avoid Windows stdout issues with tqdm
+# This must be done BEFORE importing model-related modules
+if sys.platform == 'win32':
+    os.environ['HF_HUB_DISABLE_PROGRESS_BARS'] = '1'
+    os.environ['TRANSFORMERS_VERBOSITY'] = 'error'
+    os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+    os.environ['HF_HUB_DISABLE_TQDM'] = '1'
+
 # Append the path to the parent directory of InfoMatching_Team3
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../InfoMatching_Team3')))
 from resume_interface import read_resume
@@ -85,25 +93,62 @@ def main():
         connection.commit()
         # Insert new/updated resumes into Milvus
         if resumes_to_insert:
-            # Drop and recreate only the resume collection to avoid duplicates
-            from pymilvus import utility
-            from matching_utils import connect_milvus, insert_resumes, match_resumes_to_jobs
-            connect_milvus()
-            if utility.has_collection("resume"):
-                utility.drop_collection("resume")
-            # Re-insert all resumes from SQL
-            insert_resumes(resumes_to_insert, model_name="bge-m3")
-            # Only call matching if both collections exist and are non-empty
-            if utility.has_collection("resume") and utility.has_collection("job_postings"):
-                from pymilvus import Collection
-                resume_col = Collection("resume")
-                job_col = Collection("job_postings")
-                resume_col.load()
-                job_col.load()
-                if resume_col.num_entities > 0 and job_col.num_entities > 0:
-                    from matching_utils import match_new_resumes_to_jobs
-                    match_new_resumes_to_jobs(resumes_to_insert, model_name="bge-m3")
-        st.success("Resumes uploaded and embedded successfully!")
+            try:
+                from pymilvus import utility, Collection
+                from matching_utils import connect_milvus, insert_resumes, match_resumes_to_jobs
+                connect_milvus()
+                
+                # Instead of dropping, reload all resumes from SQLite to maintain consistency
+                # This ensures we don't lose existing data if insertion fails
+                cursor.execute("SELECT id, name, email, phone, major, tech_skills, experiences, graduation_time, degree, business_domain FROM uploads")
+                all_resume_rows = cursor.fetchall()
+                all_resumes = []
+                for row in all_resume_rows:
+                    resume_dict = {
+                        'id': row[0],
+                        'name': row[1] or '',
+                        'email': row[2] or '',
+                        'phone': row[3] or '',
+                        'major': row[4] if len(row) > 4 else '',
+                        'tech_skills': row[5] if len(row) > 5 else '',
+                        'experiences': row[6] if len(row) > 6 else '',
+                        'graduation_time': row[7] if len(row) > 7 else None,
+                        'degree': row[8] if len(row) > 8 else None,
+                        'business_domain': row[9] if len(row) > 9 else None
+                    }
+                    all_resumes.append(resume_dict)
+                
+                # Drop and recreate collection with all resumes (including new ones)
+                if utility.has_collection("resume"):
+                    utility.drop_collection("resume")
+                
+                # Insert all resumes (both existing and new)
+                if all_resumes:
+                    insert_resumes(all_resumes, model_name="bge-m3")
+                    print(f"Inserted {len(all_resumes)} total resume(s) into Milvus")
+                
+                # Only call matching if both collections exist and are non-empty
+                if utility.has_collection("resume") and utility.has_collection("job_postings"):
+                    resume_col = Collection("resume")
+                    job_col = Collection("job_postings")
+                    resume_col.load()
+                    job_col.load()
+                    if resume_col.num_entities > 0 and job_col.num_entities > 0:
+                        from matching_utils import match_resumes_to_jobs
+                        # Match all resumes to all jobs
+                        # Use absolute path for CSV to ensure consistency
+                        csv_path = os.path.abspath(os.path.join(script_dir, "..", "..", "..", "search_results.csv"))
+                        match_resumes_to_jobs(csv_path=csv_path)
+                        st.success(f"✓ {len(resumes_to_insert)} resume(s) uploaded, {len(all_resumes)} total resume(s) embedded, and matched successfully!")
+                    else:
+                        st.warning(f"✓ {len(resumes_to_insert)} resume(s) uploaded and embedded, but no job postings found for matching.")
+                else:
+                    st.warning(f"✓ {len(resumes_to_insert)} resume(s) uploaded and embedded. Upload job descriptions to enable matching.")
+            except Exception as e:
+                st.error(f"Error inserting resumes into Milvus: {e}")
+                st.info("Resumes were saved to database, but embedding failed. Check Milvus connection.")
+                import traceback
+                st.code(traceback.format_exc())
     
     with st.sidebar:
         st.header("Filters")
