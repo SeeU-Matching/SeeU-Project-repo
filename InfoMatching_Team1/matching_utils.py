@@ -8,6 +8,8 @@ from jsonschema import validate, ValidationError
 import os
 from typing import List, Dict, Optional
 import csv
+import time, traceback
+import sqlite3
 
 # Model config
 MODEL = {
@@ -37,7 +39,7 @@ def generate_embeddings(texts, model_name="bge-m3"):
         texts = [texts]
     model = load_model(model_name)
     if model_name == "bge-m3":
-        embeddings = model.encode(
+            embeddings = model.encode(
             texts,
             return_dense=True,
             return_sparse=False,
@@ -81,11 +83,11 @@ def insert_job_descriptions(job_postings: List[Dict], model_name="bge-m3", colle
     connect_milvus()
     dim = MODEL[model_name]["dim"]
     fields = [
-        FieldSchema(name="job_id", dtype=DataType.INT64, is_primary=True, auto_id=True),
+        FieldSchema(name="sql_id", dtype=DataType.INT64, is_primary=True),
         FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=dim),
         FieldSchema(name="job_company", dtype=DataType.VARCHAR, max_length=200),
         FieldSchema(name="job_title", dtype=DataType.VARCHAR, max_length=200),
-        FieldSchema(name="job_application_url", dtype=DataType.VARCHAR, max_length=500)
+        FieldSchema(name="job_application_url", dtype=DataType.VARCHAR, max_length=500),
     ]
     collection = create_or_load_collection(collection_name, dim, fields)
     texts = [f"{job['job_company']} {job['job_title']} {job['job_description']}" for job in job_postings]
@@ -93,11 +95,13 @@ def insert_job_descriptions(job_postings: List[Dict], model_name="bge-m3", colle
     job_companies = [job["job_company"] for job in job_postings]
     job_titles = [job["job_title"] for job in job_postings]
     job_urls = [job["job_application_url"] for job in job_postings]
+    sql_id = [job.get("id", 0) for job in job_postings]
     collection.insert([
+        sql_id,
         embeddings,
         job_companies,
         job_titles,
-        job_urls
+        job_urls,
     ])
     collection.flush()
     print(f"Inserted {len(job_postings)} job_postings into collection '{collection_name}'.")
@@ -108,11 +112,11 @@ def insert_resumes(resumes: List[Dict], model_name="bge-m3", collection_name="re
     connect_milvus()
     dim = MODEL[model_name]["dim"]
     fields = [
-        FieldSchema(name="resume_id", dtype=DataType.INT64, is_primary=True, auto_id=True),
+        FieldSchema(name="sql_id", dtype=DataType.INT64,  is_primary=True),
         FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=dim),
         FieldSchema(name="name", dtype=DataType.VARCHAR, max_length=200),
         FieldSchema(name="email", dtype=DataType.VARCHAR, max_length=200),
-        FieldSchema(name="phone", dtype=DataType.VARCHAR, max_length=100)
+        FieldSchema(name="phone", dtype=DataType.VARCHAR, max_length=100),
     ]
     collection = create_or_load_collection(collection_name, dim, fields)
     texts = [f"{resume.get('name', '')} {resume.get('major', '')} {resume.get('tech_skills', '')} {resume.get('experiences', '')}" for resume in resumes]
@@ -123,11 +127,14 @@ def insert_resumes(resumes: List[Dict], model_name="bge-m3", collection_name="re
     names = [resume.get("name", "") for resume in resumes]
     emails = [resume.get("email", "") for resume in resumes]
     phones = [resume.get("phone", "") for resume in resumes]
+    sql_id = [resume.get("id", 0) for resume in resumes]
     collection.insert([
+        sql_id,
         embeddings,
         names,
         emails,
-        phones
+        phones,
+        
     ])
     collection.flush()
     print(f"Inserted {len(resumes)} resumes into collection '{collection_name}'.")
@@ -173,8 +180,9 @@ def match_resumes_to_jobs(
     resume_col.load()
     job_col.load()
     # Get all resume embeddings and info
-    resume_df = pd.DataFrame(resume_col.query(expr="resume_id >= 0", output_fields=["resume_id", "embedding", "name", "email", "phone"]))
-    job_df = pd.DataFrame(job_col.query(expr="job_id >= 0", output_fields=["job_id", "embedding", "job_company", "job_title", "job_application_url"]))
+    resume_df = pd.DataFrame(resume_col.query(expr="sql_id >= 0", output_fields=["sql_id", "embedding", "name", "email", "phone"]))
+    job_df = pd.DataFrame(job_col.query(expr="sql_id >= 0", output_fields=["sql_id", "embedding", "job_company", "job_title", "job_application_url"]))
+
     # Compute all-pairs similarity (L2 distance)
     from sklearn.metrics.pairwise import euclidean_distances
     import numpy as np
@@ -188,7 +196,7 @@ def match_resumes_to_jobs(
             score = dists[i, j]
             results.append({
                 "name": resume_row["name"],
-                "job_id": job_row["job_id"],
+                "job_id": job_row["sql_id"],
                 "job_company": job_row["job_company"],
                 "job_title": job_row["job_title"],
                 "job_application_url": job_row["job_application_url"],
@@ -217,11 +225,29 @@ def match_new_resumes_to_jobs(new_resumes, model_name="bge-m3", csv_path="search
         return
     job_col = Collection("job_postings")
     job_col.load()
-    job_df = pd.DataFrame(job_col.query(expr="job_id >= 0", output_fields=["job_id", "embedding", "job_company", "job_title", "job_application_url"]))
+    job_df = pd.DataFrame(job_col.query(expr="sql_id >= 0", output_fields=["sql_id", "embedding", "job_company", "job_title", "job_application_url"]))
     if job_df.empty:
         print("No jobs to match.")
         return
-
+    print("------------------------------")
+    print(job_df)
+    print("------------------------------")
+    # HARD CONSTRAINTS
+    # connect to sqlite
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    db_path = os.path.join(script_dir, "..", "my_database.db")
+    connection = sqlite3.connect(db_path)
+    cursor = connection.cursor()
+    # getch jd content from sql database
+    job_ids = job_df['sql_id'].tolist()
+    placeholders = ', '.join(['?'] * len(job_ids))
+    query = f"SELECT * FROM job_description WHERE id IN ({placeholders})"
+    cursor.execute(query, job_ids)
+    jd_content = cursor.fetchall()
+    print("------------------------------")
+    print(jd_content)
+    print("------------------------------")
+    
     # Prepare new resume embeddings
     texts = [f"{resume.get('name', '')} {resume.get('major', '')} {resume.get('tech_skills', '')} {resume.get('experiences', '')}" for resume in new_resumes]
     embeddings = generate_embeddings(texts, model_name=model_name)
@@ -233,12 +259,13 @@ def match_new_resumes_to_jobs(new_resumes, model_name="bge-m3", csv_path="search
     from sklearn.metrics.pairwise import euclidean_distances
     job_embs = np.vstack(job_df["embedding"].tolist())
     results = []
+
     for i, (embedding, name) in enumerate(zip(embeddings, names)):
         dists = euclidean_distances([embedding], job_embs)[0]
         for j, job_row in job_df.iterrows():
             results.append({
                 "name": name,
-                "job_id": job_row["job_id"],
+                "job_id": job_row["sql_id"],
                 "job_company": job_row["job_company"],
                 "job_title": job_row["job_title"],
                 "job_application_url": job_row["job_application_url"],
@@ -255,17 +282,36 @@ def match_all_resumes_to_new_jobs(new_jobs, model_name="bge-m3", csv_path="searc
         return
     resume_col = Collection("resume")
     resume_col.load()
-    resume_df = pd.DataFrame(resume_col.query(expr="resume_id >= 0", output_fields=["resume_id", "embedding", "name", "email", "phone"]))
+    resume_df = pd.DataFrame(resume_col.query(expr="sql_id >= 0", output_fields=["sql_id", "embedding", "name", "email", "phone"]))
     if resume_df.empty:
         print("No resumes to match.")
         return
+    
+    print("############################")
+    print(resume_df)
+    print("############################")
+    # HARD CONSTRAINTS
+    # connect to sqlite
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    db_path = os.path.join(script_dir, "..", "my_database.db")
+    connection = sqlite3.connect(db_path)
+    cursor = connection.cursor()
+    # getch jd content from sql database
+    resume_ids = resume_df['sql_id'].tolist()
+    placeholders = ', '.join(['?'] * len(resume_ids))
+    query = f"SELECT * FROM uploads WHERE id IN ({placeholders})"
+    cursor.execute(query, resume_ids)
+    resume_content = cursor.fetchall()
+    print("############################")
+    print(resume_content)
+    print("############################")
 
     # Prepare new job embeddings
     texts = [f"{job.get('job_company', '')} {job.get('job_title', '')} {job.get('job_description', '')}" for job in new_jobs]
     embeddings = generate_embeddings(texts, model_name=model_name)
     if isinstance(embeddings, list) and len(embeddings) > 0 and isinstance(embeddings[0], float):
         embeddings = [embeddings]
-    job_infos = [(job.get("job_id", None), job.get("job_company", ""), job.get("job_title", ""), job.get("job_application_url", "")) for job in new_jobs]
+    job_infos = [(job.get("id", None), job.get("job_company", ""), job.get("job_title", ""), job.get("job_application_url", "")) for job in new_jobs]
 
     import numpy as np
     from sklearn.metrics.pairwise import euclidean_distances
@@ -283,3 +329,31 @@ def match_all_resumes_to_new_jobs(new_jobs, model_name="bge-m3", csv_path="searc
                 "distance": dists[j]
             })
     match_to_csv(results, csv_path=csv_path) 
+
+def deleteResumeById(id):
+    connect_milvus()
+    from pymilvus import Collection, utility
+    if not utility.has_collection("resume"):
+        print("No resumes in Milvus.")
+        return
+    resume_col = Collection("resume")
+    resume_col.load()
+    delete_query = f"sql_id in [{id}]"
+    resume_col.delete(delete_query)
+    resume_col.flush()
+    print(f"Successfully deleted resume with ID {id} from Milvus.")
+    return
+
+def deleteJDById(id):
+    connect_milvus()
+    from pymilvus import Collection, utility
+    if not utility.has_collection("job_postings"):
+        print("No JDs in Milvus.")
+        return
+    job_col = Collection("job_postings")
+    job_col.load()
+    delete_query = f"sql_id in [{id}]"
+    job_col.delete(delete_query)
+    job_col.flush()
+    print(f"Successfully deleted jd with ID {id} from Milvus.")
+    return

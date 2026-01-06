@@ -10,7 +10,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../.
 from jd_function import extract_job_data
 # Import Milvus embedding/insert function
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../InfoMatching_Team1')))
-from matching_utils import insert_job_descriptions
+from matching_utils import insert_job_descriptions, deleteJDById
 
 
 def sanitize_column_name(name):
@@ -66,8 +66,11 @@ def main():
                 columns = ', '.join(data.keys())
                 placeholders = ', '.join(['?'] * len(data))
                 cursor.execute(f'INSERT INTO job_description ({columns}) VALUES ({placeholders})', list(data.values()))
+                # get sql id
+                new_id = cursor.lastrowid
                 # Add to jobs_to_insert for embedding
                 jobs_to_insert.append({
+                    'id':new_id,
                     'job_company': row['job_company'],
                     'job_title': row['job_title'],
                     'job_description': row['job_description'],
@@ -77,7 +80,11 @@ def main():
                 update_columns = ', '.join([f"{key} = ?" for key in data.keys()])
                 cursor.execute(f'UPDATE job_description SET {update_columns} WHERE job_company = ? AND job_title = ?', list(data.values()) + [row['job_company'], row['job_title']])
                 # For update, also embed/insert (Milvus will deduplicate by content)
+                cursor.execute("SELECT id FROM job_description WHERE job_company = ? AND job_title = ?", (row['job_company'], row['job_title']))
+                existing_id = cursor.fetchone()[0]
+                
                 jobs_to_insert.append({
+                    'id': existing_id,
                     'job_company': row['job_company'],
                     'job_title': row['job_title'],
                     'job_description': row['job_description'],
@@ -101,10 +108,15 @@ def main():
     
     with st.sidebar:
         st.header("Filters")
-        essential_columns = ['job_company', 'job_title']
+        essential_columns = ['job_company', 'job_title', 'id']
         filter_columns = [col for col in column_names if col not in ['job_application_url']]
         selectable_columns = [col for col in filter_columns if col not in essential_columns]
+        # Add created_date to selectable_columns if created_at exists (for independent selection)
+        if 'created_at' in column_names and 'created_date' not in selectable_columns:
+            created_at_idx = selectable_columns.index('created_at') if 'created_at' in selectable_columns else len(selectable_columns)
+            selectable_columns.insert(created_at_idx + 1, 'created_date')
         selected_columns = st.multiselect("Display columns", options=selectable_columns, default=selectable_columns if selectable_columns else [])
+        # SQL query only uses actual database columns (exclude computed columns like created_date)
         query = "SELECT " + ', '.join(column_names) + " FROM job_description WHERE 1=1"
         params = []
         for column in filter_columns:
@@ -119,7 +131,20 @@ def main():
 
     if data:
         df = pd.DataFrame(data, columns=column_names)
+        
+        # Add created_date column from created_at (extract date part only)
+        # created_date is a computed column, not in database - users can select it separately from created_at
+        if 'created_at' in df.columns and 'created_date' not in df.columns:
+            # Extract date part from datetime string (format: YYYY-MM-DD HH:MM:SS -> YYYY-MM-DD)
+            created_date_values = df['created_at'].apply(lambda x: str(x).split(' ')[0] if x and pd.notna(x) and str(x).strip() else '')
+            # Insert created_date right after created_at
+            created_at_idx = df.columns.get_loc('created_at')
+            df.insert(created_at_idx + 1, 'created_date', created_date_values)
+        
         display_columns = essential_columns + selected_columns  # Ensure essential columns are always included
+        # created_date is independent - only show if explicitly selected
+        # Filter out created_date if it's not in df yet (shouldn't happen, but safety check)
+        display_columns = [col for col in display_columns if col in df.columns]
         df = df[display_columns]
         df.insert(0, "Select", False)
         edited_df = st.data_editor(
@@ -131,7 +156,7 @@ def main():
             },
             hide_index=True
         )
-        selected_files = [f"{row['job_company']}: {row['job_title']}" for _, row in edited_df.iterrows() if row["Select"]]
+        selected_files = [f"{row['id']}: {row['job_company']}: {row['job_title']}" for _, row in edited_df.iterrows() if row["Select"]]
         st.write("Selected Jobs:", selected_files)
         if "confirm_delete" not in st.session_state:
             st.session_state.confirm_delete = False
@@ -148,8 +173,10 @@ def main():
                 connection = sqlite3.connect(db_path)
                 cursor = connection.cursor()
                 for job in st.session_state.jobs_to_delete:
-                    company, title = job.split(": ")
-                    cursor.execute("DELETE FROM job_description WHERE job_company = ? AND job_title = ?", (company, title))
+                    id_str, company, title = job.split(": ", 2)
+                    id = int(id_str)
+                    cursor.execute("DELETE FROM job_description WHERE id = ?", (id, ))
+                    deleteJDById(id)
                 connection.commit()
                 connection.close()
                 st.success("Selected job descriptions deleted successfully!")
