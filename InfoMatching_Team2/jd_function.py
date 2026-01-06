@@ -11,6 +11,11 @@ client = OpenAI(api_key=key)
 def extract_job_data(jd):
     result = []
     prompt = """extract detailed information from job description, including only the following fields: Company Industry Field(Search it), Major, Tech skills, graduation time(return not specified if not mentioned), minimum academic qualification and Experience domain. 
+                
+                CRITICAL: For "minimum_academic_qualification", output ONLY "Bachelor", "Master", "PhD", or "Not specified". If multiple degrees mentioned, output the minimum. DO NOT output full degree names or variations.
+                
+                CRITICAL: For "Experience domain" field, output a list with ONLY these 14 domains: "Computer Science", "Business", "Engineering", "Arts", "Science", "Healthcare", "Education", "Law", "Media / Communications", "Social Sciences", "Agriculture", "Hospitality / Tourism", "Architecture", "Finance". Output one or more domains that best match the job. DO NOT output any other text or variations.
+                
                 Always output plain JSON without any markdown or formatting. \n
                 Job description is:""" + jd
     try:
