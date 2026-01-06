@@ -163,7 +163,12 @@ def llm_parse(text, detailed_experience=False):
         model=model_name,
         messages=[
             {'role': 'system', 'content': """You are a recruiter looking to extract information from a student resume. 
-Extract the name (should have white space between first name and last name), phone, email, address, links, school(s), gpa(s) (e.g. 3.85/4.00), major(s) (without degree, e.g. Master of Science in Information should be Information Science), degree(s) (e.g. Master of Science in Information), graduation_time (YYYY-MM), tech_skills (e.g., Python, SQL), business_domain(s) (or industry of company despite schools, at least two, e.g., finance, supply chain) and """ + experiment_prompt + """ 
+Extract the name (should have white space between first name and last name), phone, email, address, links, school(s), gpa(s) (e.g. 3.85/4.00), major(s) (without degree, e.g. Master of Science in Information should be Information Science), degree(s), graduation_time (YYYY-MM), tech_skills (e.g., Python, SQL), business_domain(s) and """ + experiment_prompt + """ 
+
+CRITICAL: For "degree" field, output a list with ONLY "Bachelor", "Master", or "PhD". DO NOT output full degree names or variations. Examples: "Bachelor of Science" -> ["Bachelor"], "Master of Engineering" -> ["Master"], multiple degrees -> ["Bachelor", "Master"].
+
+CRITICAL: For "business_domain" field, output a list with ONLY these 14 domains: "Computer Science", "Business", "Engineering", "Arts", "Science", "Healthcare", "Education", "Law", "Media / Communications", "Social Sciences", "Agriculture", "Hospitality / Tourism", "Architecture", "Finance". Output one or more domains that best match the student's major and background. DO NOT output any other text or variations.
+
 Always output plain JSON without any markdown or formatting, only the raw JSON object. Please respond in English.
 JSON SCHEMA: {"name": str, "phone": str, "email": str, "address": str, "links": list[str], "school": list[str], "gpa": list[str], "major": list[str], "degree": list[str], "graduation_time": str, "tech_skills": list[str], "business_domain": list[str], "experiences": list[str]}"""},
             {"role": "user", "content": """Resume
