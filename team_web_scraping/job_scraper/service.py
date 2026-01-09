@@ -1,10 +1,9 @@
 """High-level service layer for job scraping operations."""
 
 from typing import List, Dict, Optional, Any
-from .core.beautifulsoup_scraper import BeautifulSoupScraper
-from .core.selenium_scraper import SeleniumJobScraper
-from .utils.save_csv import save_jobs_to_csv
-from .models.job import JobResult
+from job_scraper.core import BeautifulSoupScraper, SeleniumJobScraper
+from job_scraper.utils import save_jobs_to_csv
+from job_scraper.models import JobResult
 
 
 class JobScraperService:
@@ -29,7 +28,7 @@ class JobScraperService:
     def scrape_jobs(self,
                     job_title: str,
                     location: str,
-                    pages: int = 1,
+                    pages: int | None = None,
                     use_selenium_for_details: bool = False,
                     time_filter: str = "r86400",
                     experience_levels: str = "1,2,3") -> List[JobResult]:

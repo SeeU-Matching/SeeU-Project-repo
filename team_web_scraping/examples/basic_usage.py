@@ -1,4 +1,4 @@
-from team_web_scraping.job_scraper.service import JobScraperService
+from job_scraper.service import JobScraperService
 
 def example_1_basic_scraping():
     """Basic example: Scrape jobs and export to CSV."""
@@ -13,8 +13,8 @@ def example_1_basic_scraping():
     output_file = scraper.scrape_and_export(
         job_title="Software Engineer",
         location="San Francisco",
-        output_file="sf_engineers.csv",
-        pages=1  # Scrape 2 pages (50 jobs)
+        output_file="full_sf_engineers.csv",
+        pages=None,
     )
 
     print(f"\n✓ Jobs exported to: {output_file}\n")
@@ -79,8 +79,8 @@ def main():
 
     try:
         # Run examples
-        example_1_basic_scraping()
         example_2_get_jobs_as_data()
+        example_1_basic_scraping()
         # example_3_with_selenium()
 
         print("=" * 60)

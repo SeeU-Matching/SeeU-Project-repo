@@ -5,7 +5,7 @@ from typing import List, Dict, Optional
 import re
 import requests
 from bs4 import BeautifulSoup
-from ..models.job import JobDetail, JobResult
+from job_scraper.models import JobDetail, JobResult
 
 
 class BeautifulSoupScraper:
@@ -29,7 +29,7 @@ class BeautifulSoupScraper:
         self,
         job_title: str,
         location: str,
-        pages: int = 1,
+        pages: int = None,  # None means fetch all available pages
         time_filter: str = "r86400",  # last 24h
         experience_levels: str = "1,2,3"  # internship, entry, associate
     ) -> List[Dict[str, str]]:
@@ -39,7 +39,8 @@ class BeautifulSoupScraper:
         Args:
             job_title: Job title/keywords to search
             location: Location to search in
-            pages: Number of pages to fetch (25 results per page)
+            pages: Number of pages to fetch (25 results per page). 
+                   If None, fetches all available pages.
             time_filter: Time filter (r86400=24h, r604800=week, r2592000=month)
             experience_levels: Comma-separated experience levels 
                 (1=internship, 2=entry, 3=associate)
@@ -48,8 +49,12 @@ class BeautifulSoupScraper:
             List of dictionaries with keys: job_id, url, title, company, location
         """
         results: List[Dict[str, str]] = []
+        page = 0
+        max_pages = pages if pages is not None else float('inf')
+        consecutive_empty_pages = 0
+        max_consecutive_empty = 2  # Stop after 2 consecutive empty pages
 
-        for page in range(pages):
+        while page < max_pages:
             params = {
                 "keywords": job_title,
                 "location": location,
@@ -73,22 +78,37 @@ class BeautifulSoupScraper:
                 soup = BeautifulSoup(resp.text, "html.parser")
                 cards = soup.select("li")
 
-                if not cards:
-                    print(f"No job cards found on page {page + 1}")
-                    break
-
+                # Parse listings from this page
+                page_results = []
                 for card in cards:
                     listing = self._parse_listing_card(card)
                     if listing:
-                        results.append(listing)
+                        page_results.append(listing)
+
+                # If no results found on this page
+                if not page_results:
+                    consecutive_empty_pages += 1
+                    print(f"No job listings found on page {page + 1}")
+
+                    if consecutive_empty_pages >= max_consecutive_empty:
+                        print(f"Reached end of available results at page {page + 1}")
+                        break
+                else:
+                    consecutive_empty_pages = 0
+                    results.extend(page_results)
+                    print(f"Found {len(page_results)} listings on page {page + 1}")
+
+                page += 1
 
             except requests.RequestException as e:
                 print(f"Request error on page {page + 1}: {e}")
                 break
             except Exception as e:
                 print(f"Error processing page {page + 1}: {e}")
+                page += 1  # Continue to next page on parsing errors
                 continue
 
+        print(f"Total listings fetched: {len(results)}")
         return results
 
     def _parse_listing_card(self, card) -> Optional[Dict[str, str]]:

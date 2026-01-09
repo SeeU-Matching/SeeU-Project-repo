@@ -1,7 +1,7 @@
 import csv
 from typing import List
 
-from ..models.job import JobResult
+from job_scraper.models.job import JobResult
 
 def save_jobs_to_csv(jobs: List[JobResult], file_path: str ="jobs.csv"):
     """

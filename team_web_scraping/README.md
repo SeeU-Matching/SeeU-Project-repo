@@ -27,6 +27,7 @@ SELENIUM_USER_DATA_DIR=/absolute/path/to/chrome/user/data
 
 ## Running Server
 ```bash
+cd team_web_scraping
 uvicorn team_web_scraping.demo.main:app --reload --host 127.0.0.1 --port 8000
 ```
 ### Endpoint
@@ -49,8 +50,16 @@ http://localhost:8000/scrape
 ### Example Scripts
 Run in project root
 ```bash
-python -m team_web_scraping.examples.basic_usage
+cd team_web_scraping
+python -m examples.basic_usage
 ```
 ```bash
-python -m team_web_scraping.examples.quick_testing
+cd team_web_scraping
+python -m examples.quick_testing
+```
+
+## install job_scraper as dependency(other teams)
+```bash
+cd team_web_scraping
+pip install -e .
 ```

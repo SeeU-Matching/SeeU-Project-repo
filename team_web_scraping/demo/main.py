@@ -1,9 +1,10 @@
 from typing import List
+import os
 from dotenv import load_dotenv
 from fastapi import FastAPI
-from ..job_scraper.service import JobScraperService
-from ..job_scraper.models.job import JobResult, JobSearchRequest
-import os
+from job_scraper.service import JobScraperService
+from job_scraper.models import JobResult, JobSearchRequest
+
 load_dotenv()
 
 app = FastAPI(title="LinkedIn Job Scraper API")

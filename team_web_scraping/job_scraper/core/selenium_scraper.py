@@ -9,7 +9,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
-from ..models.job import JobDetail, JobResult
+from job_scraper.models import JobDetail, JobResult
 
 class SeleniumJobScraper:
     def __init__(self,

@@ -1,5 +1,5 @@
 # quick_test.py
-from team_web_scraping.job_scraper.core.selenium_scraper import SeleniumJobScraper
+from job_scraper.core.selenium_scraper import SeleniumJobScraper
 from dotenv import load_dotenv
 load_dotenv()
 

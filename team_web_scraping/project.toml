@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "job-scraper"
+version = "0.1.0"
+description = "Job information crawling and scraping core library"
+requires-python = ">=3.12"
+
+dependencies = [
+  "selenium",
+  "fastapi",
+  "uvicorn",
+  "requests",
+  "beautifulsoup4",
+  "webdriver-manager",
+  "python-dotenv"
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["job_scraper*"]
