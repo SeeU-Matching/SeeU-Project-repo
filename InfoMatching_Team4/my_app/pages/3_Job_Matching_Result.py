@@ -1,5 +1,4 @@
 # pages/3_Job_Matching_Result.py
-
 import sys
 import os
 
@@ -14,7 +13,8 @@ import sqlite3
 
 from InfoMatching_Team4.llm_fit import rate_fit
 
-LLM_COL = "LLM Fit (ChatGPT)"
+LLM_COL = "LLM Fit (Strict)"
+SCORE_COL = "LLM Score"
 
 
 def get_latest_resume_id_by_name(cur, student_name: str):
@@ -32,50 +32,61 @@ def get_latest_resume_id_by_name(cur, student_name: str):
 
 
 def build_resume_text_from_uploads(cur, resume_id: int) -> str:
-    # Get all columns in uploads table
-    cur.execute("PRAGMA table_info(uploads)")
-    cols = [r[1] for r in cur.fetchall()]
-
-    cur.execute(f"SELECT {', '.join(cols)} FROM uploads WHERE id = ?", (resume_id,))
-    row = cur.fetchone()
-    if not row:
+    # ONLY use the parsed resume experience field (plural!)
+    # resume_interface.py outputs "experiences"
+    cur.execute("SELECT experiences FROM uploads WHERE id = ?", (resume_id,))
+    r = cur.fetchone()
+    if not r or r[0] is None:
         return ""
 
-    d = dict(zip(cols, row))
+    s = str(r[0]).strip()
+    if not s or s.lower() == "nan":
+        return ""
 
-    # Prefer common fields if present; otherwise concatenate all non-empty text fields
-    preferred = [
-        "major",
-        "degree",
-        "gpa",
-        "business_domain",
-        "education",
-        "skills",
-        "experience",
-        "projects",
-        "summary",
-    ]
-    keys = [k for k in preferred if k in d]
-
-    if not keys:
-        skip = {"id", "file_path", "uploaded_at", "created_at"}
-        keys = [k for k in cols if k not in skip]
-
-    parts = []
-    for k in keys:
-        v = d.get(k)
-        if v is None:
-            continue
-        s = str(v).strip()
-        if s and s.lower() != "nan":
-            parts.append(f"{k}: {s}")
-    return "\n".join(parts)
+    return s
 
 
 def get_jd_text(cur, job_id: int) -> str:
     cur.execute("SELECT job_description FROM job_description WHERE id = ?", (job_id,))
     r = cur.fetchone()
     return str(r[0]) if r and r[0] else ""
+
+
+def apply_high_cap(df_in: pd.DataFrame) -> pd.DataFrame:
+    if "name" not in df_in.columns or SCORE_COL not in df_in.columns:
+        return df_in
+
+    def _band(score: float) -> str:
+        if score >= 85:
+            return "High"
+        if score >= 60:
+            return "Medium"
+        return "Low"
+
+    def _cap_group(g: pd.DataFrame) -> pd.DataFrame:
+        gg = g.copy()
+        gg[SCORE_COL] = pd.to_numeric(gg[SCORE_COL], errors="coerce").fillna(0.0)
+
+        # 1) label by score thresholds
+        gg[LLM_COL] = gg[SCORE_COL].apply(lambda x: _band(float(x)))
+
+        # 2) cap High to <= 5% by keeping only top-k High scores
+        gg_sorted = gg.sort_values(SCORE_COL, ascending=False)
+        n = len(gg_sorted)
+        k = int(n * 0.05)  # allow 0
+
+        if k <= 0:
+            gg[LLM_COL] = gg[LLM_COL].replace({"High": "Medium"})
+            return gg
+
+        high_idx = gg_sorted.index[gg_sorted[LLM_COL] == "High"].tolist()
+        # keep first k highs, downgrade the rest
+        for idx in high_idx[k:]:
+            gg.at[idx, LLM_COL] = "Medium"
+
+        return gg
+
+    return df_in.groupby("name", group_keys=False).apply(_cap_group)
 
 
 def main():
@@ -98,9 +109,11 @@ def main():
         st.write("No matching results found.")
         return
 
-    # LLM rating controls
-    st.caption("Optional: Use ChatGPT (OpenAI API) to rate match quality (High/Medium/Low) based on resume experience vs JD text.")
-    run_rating = st.button("Compute LLM Fit (ChatGPT) for ALL matches")
+    st.caption(
+        "Optional: Use LLM to rate match quality (High/Medium/Low) STRICTLY based on resume EXPERIENCE (internships + projects) vs JD text. "
+        "Final High will be capped to <= 5% per student."
+    )
+    run_rating = st.button("Compute LLM Fit (Strict) for ALL matches")
 
     if "llm_cache" not in st.session_state:
         st.session_state["llm_cache"] = {}
@@ -117,46 +130,46 @@ def main():
                 cur = conn.cursor()
 
                 df_top = df.copy()
-                ratings, confs = [], []
+                rating_raw_list, scores = [], []
 
                 for _, row in df_top.iterrows():
                     sname = str(row["name"]).strip()
                     try:
                         jid = int(row["job_id"])
                     except Exception:
-                        ratings.append("Medium")
-                        confs.append(0.0)
+                        rating_raw_list.append("Medium")
+                        scores.append(0)
                         continue
 
                     resume_id = get_latest_resume_id_by_name(cur, sname)
                     if resume_id is None:
-                        ratings.append("Medium")
-                        confs.append(0.0)
+                        rating_raw_list.append("Medium")
+                        scores.append(0)
                         continue
 
                     resume_text = build_resume_text_from_uploads(cur, resume_id)
                     jd_text = get_jd_text(cur, jid)
 
                     if not resume_text or not jd_text:
-                        ratings.append("Medium")
-                        confs.append(0.0)
+                        rating_raw_list.append("Medium")
+                        scores.append(0)
                         continue
 
                     out = rate_fit(resume_text, jd_text, cache=st.session_state["llm_cache"])
-                    ratings.append(out["rating"])
-                    try:
-                        confs.append(round(float(out["confidence"]), 3))  # <-- 3 decimal
-                    except Exception:
-                        confs.append(0.000)
+                    rating_raw_list.append(out.get("rating_raw", "Medium"))
+                    scores.append(out.get("score", 0))
 
                 conn.close()
 
-                for col in [LLM_COL, "LLM Confidence"]:
+                for col in [LLM_COL, SCORE_COL, "LLM Rating Raw"]:
                     if col not in df.columns:
                         df[col] = ""
 
-                df.loc[df_top.index, LLM_COL] = ratings
-                df.loc[df_top.index, "LLM Confidence"] = confs
+                df.loc[df_top.index, "LLM Rating Raw"] = rating_raw_list
+                df.loc[df_top.index, SCORE_COL] = scores
+
+                # Apply strict cap so final LLM_COL satisfies High <= 5%
+                df = apply_high_cap(df)
 
     st.dataframe(df, use_container_width=True)
 
