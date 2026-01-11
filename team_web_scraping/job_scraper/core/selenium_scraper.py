@@ -9,7 +9,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
-from job_scraper.models import JobDetail, JobResult
+from ..models import JobDetail, JobResult
 
 class SeleniumJobScraper:
     def __init__(self,
@@ -92,7 +92,7 @@ class SeleniumJobScraper:
                 apply_url=job_data.get("apply_url"),
                 industry=job_data.get("industry"),
                 job_url="" if job_data.get("job_id") == "" \
-                    else f"https://www.linkedin.com/jobs/view/{job_data.get("job_id")}"
+                    else f"https://www.linkedin.com/jobs/view/{job_data.get('job_id')}"
             )
             results.append(job_result)
 

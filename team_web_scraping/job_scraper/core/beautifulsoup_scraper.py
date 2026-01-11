@@ -5,7 +5,7 @@ from typing import List, Dict, Optional
 import re
 import requests
 from bs4 import BeautifulSoup
-from job_scraper.models import JobDetail, JobResult
+from ..models import JobDetail, JobResult
 
 
 class BeautifulSoupScraper:
@@ -185,7 +185,7 @@ class BeautifulSoupScraper:
                 apply_url=job_data.get("apply_url"),
                 industry=job_data.get("industry"),
                 job_url="" if job_data.get("job_id") == "" \
-                    else f"https://www.linkedin.com/jobs/view/{job_data.get("job_id")}"
+                    else f"https://www.linkedin.com/jobs/view/{job_data.get('job_id')}"
             )
             results.append(job_result)
 
@@ -204,8 +204,11 @@ class BeautifulSoupScraper:
         try:
             resp = requests.get(url, headers=self.headers, timeout=self.timeout)
 
+            # if resp.status_code != 200:
+            #     return "", "", None, "", ""
+            
             if resp.status_code != 200:
-                return "", "", None, "", ""
+                return JobDetail()
 
             soup = BeautifulSoup(resp.text, "html.parser")
 

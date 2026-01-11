@@ -1,9 +1,9 @@
 """High-level service layer for job scraping operations."""
 
-from typing import List, Dict, Optional, Any
-from job_scraper.core import BeautifulSoupScraper, SeleniumJobScraper
-from job_scraper.utils import save_jobs_to_csv
-from job_scraper.models import JobResult
+from typing import List, Dict, Optional, Any, Iterable
+from ..job_scraper.core import BeautifulSoupScraper, SeleniumJobScraper
+from ..job_scraper.utils import save_jobs_to_csv
+from ..job_scraper.models import JobResult
 
 
 class JobScraperService:
