@@ -1,0 +1,57 @@
+{
+  "software_engineering": [
+    "software engineer",
+    "backend engineer",
+    "frontend engineer",
+    "full stack engineer",
+    "platform engineer",
+    "devops",
+    "security engineer"
+  ],
+  "data_ai": [
+    "data scientist",
+    "data analyst",
+    "machine learning",
+    "ai engineer",
+    "quant"
+  ],
+  "finance": [
+    "finance",
+    "trading",
+    "investment",
+    "portfolio"
+  ],
+  "business_marketing": [
+    "marketing",
+    "business analyst",
+    "strategy",
+    "operations"
+  ],
+  "product": [
+    "product manager",
+    "program manager"
+  ],
+  "legal_compliance": [
+    "legal",
+    "compliance",
+    "regulatory"
+  ],
+  "design": [
+    "ux",
+    "ui",
+    "product designer"
+  ],
+  "research": [
+    "research"
+  ],
+  "life_science": [
+    "biotech",
+    "clinical",
+    "pharma"
+  ],
+  "hr": [
+    "recruiting",
+    "human resources",
+    "talent"
+  ]
+}

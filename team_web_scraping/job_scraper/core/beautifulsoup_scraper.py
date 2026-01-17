@@ -205,7 +205,7 @@ class BeautifulSoupScraper:
             resp = requests.get(url, headers=self.headers, timeout=self.timeout)
 
             if resp.status_code != 200:
-                return "", "", None, "", ""
+                return JobDetail()
 
             soup = BeautifulSoup(resp.text, "html.parser")
 
