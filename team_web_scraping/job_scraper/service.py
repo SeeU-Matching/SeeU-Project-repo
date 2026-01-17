@@ -4,7 +4,7 @@ from typing import Iterable, List, Dict, Optional, Any
 from job_scraper.core import BeautifulSoupScraper, SeleniumJobScraper
 from job_scraper.utils import save_jobs_to_csv
 from job_scraper.models import JobResult
-
+from job_scraper.utils.http import human_delay
 
 class JobScraperService:
     """Main service for job scraping operations that other projects can import."""
@@ -168,6 +168,8 @@ class JobScraperService:
                         experience_levels=experience_levels,
                     )
                 )
+                human_delay()
+        self.bs_scraper.clear_cache()
         print(f"Exporting to {output_file}...")
         save_jobs_to_csv(results, output_file)
         print(f"Successfully exported {len(results)} jobs to {output_file}")

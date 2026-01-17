@@ -6,6 +6,7 @@ import re
 import requests
 from bs4 import BeautifulSoup
 from job_scraper.models import JobDetail, JobResult
+from job_scraper.utils import create_session, human_delay
 
 
 class BeautifulSoupScraper:
@@ -19,11 +20,13 @@ class BeautifulSoupScraper:
             timeout: Request timeout in seconds
         """
         self.timeout = timeout
-        self.headers = {
-            "User-Agent": "Mozilla/5.0",
-            "Accept-Language": "en-US,en;q=0.9",
-        }
+        self.session = create_session()
         self.base_url = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
+        self.job_id_cache = set()
+
+    def clear_cache(self):
+        """Clear the job ID cache to avoid infinite growth."""
+        self.job_id_cache.clear()
 
     def get_listings(
         self,
@@ -64,10 +67,9 @@ class BeautifulSoupScraper:
             }
 
             try:
-                resp = requests.get(
+                resp = self.session.get(
                     self.base_url,
                     params=params,
-                    headers=self.headers,
                     timeout=self.timeout
                 )
 
@@ -83,6 +85,11 @@ class BeautifulSoupScraper:
                 for card in cards:
                     listing = self._parse_listing_card(card)
                     if listing:
+                        if listing["job_id"] != "" and listing["job_id"] in self.job_id_cache:
+                            print("Duplicate job found, skipping: ", listing["job_id"])
+                            continue  # Skip duplicates
+                        if listing["job_id"] != "":
+                            self.job_id_cache.add(listing["job_id"])
                         page_results.append(listing)
 
                 # If no results found on this page
@@ -99,6 +106,7 @@ class BeautifulSoupScraper:
                     print(f"Found {len(page_results)} listings on page {page + 1}")
 
                 page += 1
+                human_delay(2, 4)
 
             except requests.RequestException as e:
                 print(f"Request error on page {page + 1}: {e}")
@@ -188,6 +196,7 @@ class BeautifulSoupScraper:
                     else f"https://www.linkedin.com/jobs/view/{job_data.get("job_id")}"
             )
             results.append(job_result)
+            human_delay(2, 5)
 
         return results
 
@@ -202,7 +211,7 @@ class BeautifulSoupScraper:
             Tuple of (description, apply_url, industry, title, company)
         """
         try:
-            resp = requests.get(url, headers=self.headers, timeout=self.timeout)
+            resp = self.session.get(url, timeout=self.timeout)
 
             if resp.status_code != 200:
                 return JobDetail()
