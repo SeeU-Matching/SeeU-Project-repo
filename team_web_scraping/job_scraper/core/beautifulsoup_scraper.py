@@ -1,5 +1,6 @@
 """BeautifulSoup-based scraper for LinkedIn job listings."""
-
+import logging
+import time
 from urllib.parse import unquote
 from typing import List, Dict, Optional
 import re
@@ -7,6 +8,8 @@ import requests
 from bs4 import BeautifulSoup
 from job_scraper.models import JobDetail, JobResult
 from job_scraper.utils import create_session, human_delay
+
+logger = logging.getLogger(__name__)
 
 
 class BeautifulSoupScraper:
@@ -61,20 +64,22 @@ class BeautifulSoupScraper:
             params = {
                 "keywords": job_title,
                 "location": location,
-                "start": page * 25,
+                "start": page * 10,
                 "f_TPR": time_filter,
                 "f_E": experience_levels,
             }
 
             try:
+                resp_start = time.time()
                 resp = self.session.get(
                     self.base_url,
                     params=params,
                     timeout=self.timeout
                 )
+                logger.debug("Request time %s", time.time() - resp_start)
 
                 if resp.status_code != 200:
-                    print(f"Failed to fetch page {page + 1}, status: {resp.status_code}")
+                    logger.warning("Failed to fetch page %s, status: %s", page + 1, resp.status_code)
                     break
 
                 soup = BeautifulSoup(resp.text, "html.parser")
@@ -83,10 +88,12 @@ class BeautifulSoupScraper:
                 # Parse listings from this page
                 page_results = []
                 for card in cards:
+                    parse_start = time.time()
                     listing = self._parse_listing_card(card)
+                    logger.debug("Card parsing time %s", time.time() - parse_start)
                     if listing:
                         if listing["job_id"] != "" and listing["job_id"] in self.job_id_cache:
-                            print("Duplicate job found, skipping: ", listing["job_id"])
+                            logger.debug("Duplicate job found, skipping: %s", listing['job_id'])
                             continue  # Skip duplicates
                         if listing["job_id"] != "":
                             self.job_id_cache.add(listing["job_id"])
@@ -95,28 +102,28 @@ class BeautifulSoupScraper:
                 # If no results found on this page
                 if not page_results:
                     consecutive_empty_pages += 1
-                    print(f"No job listings found on page {page + 1}")
+                    logger.debug("No job listings found on page %s", page + 1)
 
                     if consecutive_empty_pages >= max_consecutive_empty:
-                        print(f"Reached end of available results at page {page + 1}")
+                        logger.debug("Reached end of available results at page %s", page + 1)
                         break
                 else:
                     consecutive_empty_pages = 0
                     results.extend(page_results)
-                    print(f"Found {len(page_results)} listings on page {page + 1}")
+                    logger.debug("Found %s listings on page %s", len(page_results), page + 1)
 
                 page += 1
                 human_delay(2, 4)
 
             except requests.RequestException as e:
-                print(f"Request error on page {page + 1}: {e}")
+                logger.error("Request error on page %s: %s", page + 1, e)
                 break
             except Exception as e:
-                print(f"Error processing page {page + 1}: {e}")
+                logger.error("Error processing page %s: %s", page + 1, e)
                 page += 1  # Continue to next page on parsing errors
                 continue
 
-        print(f"Total listings fetched: {len(results)}")
+        logger.debug("Total listings fetched: %s", len(results))
         return results
 
     def _parse_listing_card(self, card) -> Optional[Dict[str, str]]:
@@ -140,7 +147,7 @@ class BeautifulSoupScraper:
             location = card.select_one("span.job-search-card__location").get_text(strip=True)
 
             # Extract job ID from URL
-            match = re.search(r"/jobs/view/(?:[\w-]+-)?(\d+)", url)
+            match = re.search(r"/jobs/view/.*?(\d+)", url)
             job_id = match.group(1) if match else ""
 
             return {
@@ -169,8 +176,10 @@ class BeautifulSoupScraper:
             url = listing.get("url")
             if not url:
                 continue
-
+            
+            detail_start = time.time()
             job_detail = self._fetch_job_detail(url)
+            logger.debug("Fetch detail time %s", time.time() - detail_start)
 
             job_data = {
                 **listing,
@@ -193,7 +202,7 @@ class BeautifulSoupScraper:
                 apply_url=job_data.get("apply_url"),
                 industry=job_data.get("industry"),
                 job_url="" if job_data.get("job_id") == "" \
-                    else f"https://www.linkedin.com/jobs/view/{job_data.get("job_id")}"
+                    else f"https://www.linkedin.com/jobs/view/{job_data.get('job_id')}"
             )
             results.append(job_result)
             human_delay(2, 5)
@@ -258,10 +267,10 @@ class BeautifulSoupScraper:
                 company=company)
 
         except requests.RequestException as e:
-            print(f"Request error fetching details from {url}: {e}")
+            logger.error("Request error fetching details from %s: %s", url, e)
             return JobDetail()
         except Exception as e:
-            print(f"Error parsing job details from {url}: {e}")
+            logger.error("Error parsing job details from %s: %s", url, e)
             return JobDetail()
 
     def _extract_apply_url(self, soup: BeautifulSoup) -> str:

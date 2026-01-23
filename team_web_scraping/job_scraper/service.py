@@ -1,10 +1,13 @@
 """High-level service layer for job scraping operations."""
 
+import logging
 from typing import Iterable, List, Dict, Optional, Any
 from job_scraper.core import BeautifulSoupScraper, SeleniumJobScraper
 from job_scraper.utils import save_jobs_to_csv
 from job_scraper.models import JobResult
 from job_scraper.utils.http import human_delay
+
+logger = logging.getLogger(__name__)
 
 class JobScraperService:
     """Main service for job scraping operations that other projects can import."""
@@ -51,7 +54,7 @@ class JobScraperService:
             List of job dictionaries with all details
         """
         # Step 1: Get job listings (always use BeautifulSoup - fast)
-        print(f"Fetching job listings for '{job_title}' in '{location}'...")
+        logger.info(f"Fetching job listings for '{job_title}' in '{location}'...")
         listings = self.bs_scraper.get_listings(
             job_title=job_title,
             location=location,
@@ -61,26 +64,26 @@ class JobScraperService:
         )
 
         if not listings:
-            print("No job listings found.")
+            logger.info("No job listings found.")
             return []
 
-        print(f"Found {len(listings)} job listings.")
+        logger.info(f"Found {len(listings)} job listings.")
 
         # Step 2: Fetch details
         if use_selenium_for_details:
-            print("Fetching job details using Selenium...")
+            logger.info("Fetching job details using Selenium...")
             try:
                 with SeleniumJobScraper(**self.selenium_options) as selenium_scraper:
                     jobs = selenium_scraper.fetch_details(listings)
             except ValueError as e:
-                print("Failed to initialize Selenium: ", e)
-                print("Use BeautifulSoup instead")
+                logger.warning(f"Failed to initialize Selenium: {e}")
+                logger.info("Use BeautifulSoup instead")
                 jobs = self.bs_scraper.fetch_details(listings)
         else:
-            print("Fetching job details using BeautifulSoup...")
+            logger.info("Fetching job details using BeautifulSoup...")
             jobs = self.bs_scraper.fetch_details(listings)
 
-        print(f"Successfully scraped {len(jobs)} jobs.")
+        logger.info(f"Successfully scraped {len(jobs)} jobs.")
         return jobs
 
     def scrape_and_export(
@@ -121,13 +124,13 @@ class JobScraperService:
         )
 
         if not jobs:
-            print("No jobs to export.")
+            logger.info("No jobs to export.")
             return output_file
 
         # Export to CSV
-        print(f"Exporting to {output_file}...")
+        logger.info(f"Exporting to {output_file}...")
         save_jobs_to_csv(jobs, output_file)
-        print(f"Successfully exported {len(jobs)} jobs to {output_file}")
+        logger.info(f"Successfully exported {len(jobs)} jobs to {output_file}")
 
         return output_file
 
@@ -170,8 +173,8 @@ class JobScraperService:
                 )
                 human_delay()
         self.bs_scraper.clear_cache()
-        print(f"Exporting to {output_file}...")
+        logger.info(f"Exporting to {output_file}...")
         save_jobs_to_csv(results, output_file)
-        print(f"Successfully exported {len(results)} jobs to {output_file}")
+        logger.info(f"Successfully exported {len(results)} jobs to {output_file}")
 
         return results

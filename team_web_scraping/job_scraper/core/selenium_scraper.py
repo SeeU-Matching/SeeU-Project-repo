@@ -10,6 +10,9 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 from job_scraper.models import JobDetail, JobResult
+import logging
+
+logger = logging.getLogger(__name__)
 
 class SeleniumJobScraper:
     def __init__(self,
@@ -92,7 +95,7 @@ class SeleniumJobScraper:
                 apply_url=job_data.get("apply_url"),
                 industry=job_data.get("industry"),
                 job_url="" if job_data.get("job_id") == "" \
-                    else f"https://www.linkedin.com/jobs/view/{job_data.get("job_id")}"
+                    else f"https://www.linkedin.com/jobs/view/{job_data.get('job_id')}"
             )
             results.append(job_result)
 
@@ -103,7 +106,7 @@ class SeleniumJobScraper:
     ) -> JobDetail:
         d = self.driver
         d.get(url)
-        print(">>> Navigated to:", url)
+        logger.debug(f">>> Navigated to: {url}")
         time.sleep(1)
 
         # ───────────────────────── description ─────────────────────────
@@ -188,7 +191,7 @@ class SeleniumJobScraper:
             ts   = int(time.time())
             shot = f"apply_button_fail_{ts}.png"
             d.save_screenshot(shot)
-            print(f"⚠️  Could not fetch apply URL: {e} – screenshot {shot}")
+            logger.warning(f"⚠️  Could not fetch apply URL: {e} – screenshot {shot}")
 
         # ───────────────────────── industry (optional) ─────────────────
         try:
