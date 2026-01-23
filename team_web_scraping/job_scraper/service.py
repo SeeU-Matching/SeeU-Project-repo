@@ -67,7 +67,7 @@ class JobScraperService:
             logger.info("No job listings found.")
             return []
 
-        logger.info(f"Found {len(listings)} job listings.")
+        logger.info("Found %s job listings.", len(listings))
 
         # Step 2: Fetch details
         if use_selenium_for_details:
@@ -76,14 +76,14 @@ class JobScraperService:
                 with SeleniumJobScraper(**self.selenium_options) as selenium_scraper:
                     jobs = selenium_scraper.fetch_details(listings)
             except ValueError as e:
-                logger.warning(f"Failed to initialize Selenium: {e}")
+                logger.warning("Failed to initialize Selenium: %s", e)
                 logger.info("Use BeautifulSoup instead")
                 jobs = self.bs_scraper.fetch_details(listings)
         else:
             logger.info("Fetching job details using BeautifulSoup...")
             jobs = self.bs_scraper.fetch_details(listings)
 
-        logger.info(f"Successfully scraped {len(jobs)} jobs.")
+        logger.info("Successfully scraped %s jobs.", len(jobs))
         return jobs
 
     def scrape_and_export(
@@ -128,9 +128,9 @@ class JobScraperService:
             return output_file
 
         # Export to CSV
-        logger.info(f"Exporting to {output_file}...")
+        logger.info("Exporting to %s...", output_file)
         save_jobs_to_csv(jobs, output_file)
-        logger.info(f"Successfully exported {len(jobs)} jobs to {output_file}")
+        logger.info("Successfully exported %s jobs to %s", len(jobs), output_file)
 
         return output_file
 
@@ -173,8 +173,8 @@ class JobScraperService:
                 )
                 human_delay()
         self.bs_scraper.clear_cache()
-        logger.info(f"Exporting to {output_file}...")
+        logger.info("Exporting to %s...", output_file)
         save_jobs_to_csv(results, output_file)
-        logger.info(f"Successfully exported {len(results)} jobs to {output_file}")
+        logger.info("Successfully exported %s jobs to %s", len(results), output_file)
 
         return results

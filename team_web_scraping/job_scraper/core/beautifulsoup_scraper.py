@@ -45,7 +45,7 @@ class BeautifulSoupScraper:
         Args:
             job_title: Job title/keywords to search
             location: Location to search in
-            pages: Number of pages to fetch (25 results per page). 
+            pages: Number of pages to fetch (10 results per page). 
                    If None, fetches all available pages.
             time_filter: Time filter (r86400=24h, r604800=week, r2592000=month)
             experience_levels: Comma-separated experience levels 
@@ -57,8 +57,6 @@ class BeautifulSoupScraper:
         results: List[Dict[str, str]] = []
         page = 0
         max_pages = pages if pages is not None else float('inf')
-        consecutive_empty_pages = 0
-        max_consecutive_empty = 2  # Stop after 2 consecutive empty pages
 
         while page < max_pages:
             params = {
@@ -79,7 +77,8 @@ class BeautifulSoupScraper:
                 logger.debug("Request time %s", time.time() - resp_start)
 
                 if resp.status_code != 200:
-                    logger.warning("Failed to fetch page %s, status: %s", page + 1, resp.status_code)
+                    logger.warning("Failed to fetch page %s, \
+                                   status: %s", page + 1, resp.status_code)
                     break
 
                 soup = BeautifulSoup(resp.text, "html.parser")
@@ -87,6 +86,7 @@ class BeautifulSoupScraper:
 
                 # Parse listings from this page
                 page_results = []
+                logger.debug("%s cards found", len(cards))
                 for card in cards:
                     parse_start = time.time()
                     listing = self._parse_listing_card(card)
@@ -99,18 +99,14 @@ class BeautifulSoupScraper:
                             self.job_id_cache.add(listing["job_id"])
                         page_results.append(listing)
 
-                # If no results found on this page
-                if not page_results:
-                    consecutive_empty_pages += 1
-                    logger.debug("No job listings found on page %s", page + 1)
-
-                    if consecutive_empty_pages >= max_consecutive_empty:
-                        logger.debug("Reached end of available results at page %s", page + 1)
-                        break
-                else:
-                    consecutive_empty_pages = 0
+                if len(page_results) > 0:
                     results.extend(page_results)
                     logger.debug("Found %s listings on page %s", len(page_results), page + 1)
+
+                if len(cards) < 10:
+                    logger.debug("Page %s had fewer than 10 results (%s), \
+                                 indicating last page, stopping.", page + 1, len(page_results))
+                    break
 
                 page += 1
                 human_delay(2, 4)
