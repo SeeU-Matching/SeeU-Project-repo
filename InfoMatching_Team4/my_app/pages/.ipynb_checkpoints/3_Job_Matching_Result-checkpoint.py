@@ -1,6 +1,4 @@
 # pages/3_Job_Matching_Result.py
-<<<<<<< Updated upstream
-=======
 import sys
 import os
 
@@ -8,14 +6,10 @@ import os
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
 if ROOT_DIR not in sys.path:
     sys.path.append(ROOT_DIR)
->>>>>>> Stashed changes
 
 import streamlit as st
-import sqlite3
-<<<<<<< Updated upstream
-import os
 import pandas as pd
-=======
+import sqlite3
 
 from InfoMatching_Team4.llm_fit import rate_fit
 
@@ -57,7 +51,6 @@ def get_jd_text(cur, job_id: int) -> str:
     r = cur.fetchone()
     return str(r[0]) if r and r[0] else ""
 
->>>>>>> Stashed changes
 
 def apply_high_cap(df_in: pd.DataFrame) -> pd.DataFrame:
     if "name" not in df_in.columns or SCORE_COL not in df_in.columns:
@@ -99,35 +92,21 @@ def apply_high_cap(df_in: pd.DataFrame) -> pd.DataFrame:
 def main():
     st.markdown("<h1 style='font-size:24px;'>Job Matching Result</h1>", unsafe_allow_html=True)
 
-    # Add a text input for the student name
     student_name = st.text_input("Enter Student Name to Filter Results")
 
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    db_path = os.path.join(script_dir, "../../", "my_database.db")
-    connection = sqlite3.connect(db_path)
-    cursor = connection.cursor()
+    csv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../search_results.csv"))
+    if not os.path.exists(csv_path):
+        st.write("No matching results found. (search_results.csv does not exist)")
+        return
 
-    if student_name:
-        cursor.execute("SELECT * FROM job_matching_result WHERE student_name LIKE ?", ('%' + student_name + '%',))
-    else:
-        cursor.execute("SELECT * FROM job_matching_result")
-    
-    data = cursor.fetchall()
+    df = pd.read_csv(csv_path)
+    df = df.drop_duplicates(subset=["name", "job_id", "job_application_url"], keep="last").reset_index(drop=True)
 
-    # Fetch column names
-    cursor.execute("PRAGMA table_info(job_matching_result)")
-    columns_info = cursor.fetchall()
-    column_names = [info[1] for info in columns_info]
+    if student_name and "name" in df.columns:
+        df = df[df["name"].astype(str).str.contains(student_name, case=False, na=False)]
 
-    connection.close()
-
-    if data:
-        df = pd.DataFrame(data, columns=column_names)
-        st.table(df)
-    else:
+    if df.empty:
         st.write("No matching results found.")
-<<<<<<< Updated upstream
-=======
         return
 
     st.caption(
@@ -194,7 +173,6 @@ def main():
 
     st.dataframe(df, use_container_width=True)
 
->>>>>>> Stashed changes
 
 if __name__ == "__main__":
     main()

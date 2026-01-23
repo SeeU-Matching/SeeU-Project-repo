@@ -8,52 +8,12 @@ from enum import Enum
 from openai import OpenAI
 from pydantic import BaseModel
 
-<<<<<<< Updated upstream
-try:
-    key_file_path = os.path.join(os.path.dirname(__file__), 'ds_key.txt')
-    with open(key_file_path, 'r') as file:
-        key = file.read()
-    client = OpenAI(
-        api_key=key, 
-        base_url="https://api.deepseek.com",
-    )
-    model_name = "deepseek-chat"
-    test_response = client.chat.completions.create(
-        model=model_name,
-        messages=[
-            {"role": "user", "content": "Hi"},
-        ],
-    )
-    print('Using DeekSeek.')
-except Exception as e:
-    try:
-        key_file_path = os.path.join(os.path.dirname(__file__), 'gpt_key.txt')
-        with open(key_file_path, 'r') as file:
-            key = file.read()
-        client = OpenAI(
-            api_key=key,
-        )
-        model_name = "gpt-4o-mini"
-        test_response = client.chat.completions.create(
-            model=model_name,
-            messages=[
-                {"role": "user", "content": "Hi"},
-            ],
-        )
-        print('Using GPT-4o-mini.')
-        print("Not using DeepSeek because: ", e)
-    except Exception as e2:
-        print('No valid API key found. Please provide a valid API key in a text file named "gpt_key.txt" or "ds_key.txt" in the same directory as the script.')
-        print("Not using DeepSeek because: ", e)
-        print("Not using GPT-4o-mini because: ", e2)
-=======
 # -----------------------------
 # Client selection (GPT ONLY — DeepSeek disabled)
 # -----------------------------
 key_file_path = os.path.join(os.path.dirname(__file__), "gpt_key.txt")
 with open(key_file_path, "r", encoding="utf-8") as file:
     key = file.read().strip()
->>>>>>> Stashed changes
 
 client = OpenAI(api_key=key)
 model_name = "gpt-4o-mini"
