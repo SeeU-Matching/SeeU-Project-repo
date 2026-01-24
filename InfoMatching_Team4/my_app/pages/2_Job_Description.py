@@ -5,6 +5,14 @@ import pandas as pd
 import sys
 import re
 
+# Set environment variables early to avoid Windows stdout issues with tqdm
+# This must be done BEFORE importing model-related modules
+if sys.platform == 'win32':
+    os.environ['HF_HUB_DISABLE_PROGRESS_BARS'] = '1'
+    os.environ['TRANSFORMERS_VERBOSITY'] = 'error'
+    os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+    os.environ['HF_HUB_DISABLE_TQDM'] = '1'
+
 # Append the path to the parent directory of InfoMatching_Team2
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../InfoMatching_Team2')))
 from jd_function import extract_job_data
@@ -93,18 +101,54 @@ def main():
         connection.commit()
         # Insert new/updated jobs into Milvus
         if jobs_to_insert:
-            from matching_utils import insert_job_descriptions, match_all_resumes_to_new_jobs
-            insert_job_descriptions(jobs_to_insert, model_name="bge-m3")
-            # Only call matching if both collections exist and are non-empty
-            from pymilvus import utility, Collection
-            if utility.has_collection("resume") and utility.has_collection("job_postings"):
-                resume_col = Collection("resume")
-                job_col = Collection("job_postings")
-                resume_col.load()
-                job_col.load()
-                if resume_col.num_entities > 0 and job_col.num_entities > 0:
-                    match_all_resumes_to_new_jobs(jobs_to_insert, model_name="bge-m3")
-        st.success("Job descriptions uploaded and embedded successfully!")
+            try:
+                from matching_utils import insert_job_descriptions, match_resumes_to_jobs
+                from pymilvus import utility, Collection
+                
+                # Reload all jobs from SQLite to maintain consistency
+                cursor.execute("SELECT id, job_company, job_title, job_description, job_application_url FROM job_description")
+                all_job_rows = cursor.fetchall()
+                all_jobs = []
+                for row in all_job_rows:
+                    job_dict = {
+                        'id': row[0],
+                        'job_company': row[1] or '',
+                        'job_title': row[2] or '',
+                        'job_description': row[3] or '',
+                        'job_application_url': row[4] or ''
+                    }
+                    all_jobs.append(job_dict)
+                
+                # Drop and recreate collection with all jobs (including new ones)
+                if utility.has_collection("job_postings"):
+                    utility.drop_collection("job_postings")
+                
+                # Insert all jobs (both existing and new)
+                if all_jobs:
+                    insert_job_descriptions(all_jobs, model_name="bge-m3")
+                    print(f"Inserted {len(all_jobs)} total job description(s) into Milvus")
+                
+                # Only call matching if both collections exist and are non-empty
+                if utility.has_collection("resume") and utility.has_collection("job_postings"):
+                    resume_col = Collection("resume")
+                    job_col = Collection("job_postings")
+                    resume_col.load()
+                    job_col.load()
+                    if resume_col.num_entities > 0 and job_col.num_entities > 0:
+                        # Match all resumes to all jobs
+                        # Use absolute path for CSV to ensure consistency
+                        csv_path = os.path.abspath(os.path.join(script_dir, "..", "..", "..", "search_results.csv"))
+                        match_resumes_to_jobs(csv_path=csv_path)
+                        st.success(f"✓ {len(jobs_to_insert)} job description(s) uploaded, {len(all_jobs)} total job(s) embedded, and matched successfully!")
+                    else:
+                        st.warning(f"✓ {len(jobs_to_insert)} job description(s) uploaded and embedded, but no resumes found for matching.")
+                else:
+                    st.warning(f"✓ {len(jobs_to_insert)} job description(s) uploaded and embedded. Upload resumes to enable matching.")
+            except Exception as e:
+                st.error(f"Error inserting job descriptions into Milvus: {e}")
+                st.info("Job descriptions were saved to database, but embedding failed. Check Milvus connection.")
+                import traceback
+                st.code(traceback.format_exc())
     
     with st.sidebar:
         st.header("Filters")
