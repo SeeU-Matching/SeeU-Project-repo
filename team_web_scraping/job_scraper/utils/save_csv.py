@@ -3,13 +3,10 @@ from typing import List
 
 from job_scraper.models.job import JobResult
 
-def save_jobs_to_csv(jobs: List[JobResult], file_path: str ="jobs.csv"):
+def save_jobs_to_csv(jobs: List[JobResult], file_path: str ="jobs.csv", mode: str = "w", write_header: bool = True):
     """
         Util function to save jobResults into csv
     """
-    if not jobs:
-        return
-
     fieldnames = [
         "title",
         "company",
@@ -20,9 +17,11 @@ def save_jobs_to_csv(jobs: List[JobResult], file_path: str ="jobs.csv"):
         "industry",
     ]
 
-    with open(file_path, "w", newline="", encoding="utf-8") as f:
+    with open(file_path, mode, newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
+        if write_header:
+            writer.writeheader()
 
-        for job in jobs:
-            writer.writerow(job.model_dump())
+        if jobs:
+            for job in jobs:
+                writer.writerow(job.model_dump())

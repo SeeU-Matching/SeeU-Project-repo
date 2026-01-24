@@ -7,6 +7,7 @@ from job_scraper.utils import save_jobs_to_csv
 from job_scraper.models import JobResult
 from job_scraper.utils.http import human_delay
 
+
 logger = logging.getLogger(__name__)
 
 class JobScraperService:
@@ -54,7 +55,7 @@ class JobScraperService:
             List of job dictionaries with all details
         """
         # Step 1: Get job listings (always use BeautifulSoup - fast)
-        logger.info(f"Fetching job listings for '{job_title}' in '{location}'...")
+        logger.info("Fetching job listings for '%s' in '%s'...", job_title, location)
         listings = self.bs_scraper.get_listings(
             job_title=job_title,
             location=location,

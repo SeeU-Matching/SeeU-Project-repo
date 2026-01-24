@@ -2,7 +2,7 @@
 import logging
 import time
 from urllib.parse import unquote
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 import re
 import requests
 from bs4 import BeautifulSoup
@@ -12,20 +12,36 @@ from job_scraper.utils import create_session, human_delay
 logger = logging.getLogger(__name__)
 
 
+class ProxyRateLimitError(Exception):
+    """Raised when a 429 status code is received."""
+    pass
+
+
 class BeautifulSoupScraper:
     """Scraper using BeautifulSoup and requests for LinkedIn job data."""
-
-    def __init__(self, timeout: int = 10):
+    def __init__(
+        self,
+        timeout: int = 10,
+        proxies: Optional[Dict[str, str]] = None,
+        job_id_cache: Optional[set] = None,
+        job_id_lock: Optional[Any] = None
+    ):
         """
         Initialize the BeautifulSoup scraper.
         
         Args:
             timeout: Request timeout in seconds
+            proxies: Dictionary of proxies to use
+            job_id_cache: Optional shared set for job IDs across threads
+            job_id_lock: Optional shared lock for thread-safe cache access
         """
         self.timeout = timeout
         self.session = create_session()
+        if proxies:
+            self.session.proxies.update(proxies)
         self.base_url = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
-        self.job_id_cache = set()
+        self.job_id_cache = job_id_cache if job_id_cache is not None else set()
+        self.job_id_lock = job_id_lock
 
     def clear_cache(self):
         """Clear the job ID cache to avoid infinite growth."""
@@ -76,6 +92,10 @@ class BeautifulSoupScraper:
                 )
                 logger.debug("Request time %s", time.time() - resp_start)
 
+                if resp.status_code == 429:
+                    logger.warning("Rate limit exceeded (429) on page %s", page + 1)
+                    raise ProxyRateLimitError("Rate limit exceeded")
+
                 if resp.status_code != 200:
                     logger.warning("Failed to fetch page %s, \
                                    status: %s", page + 1, resp.status_code)
@@ -92,11 +112,28 @@ class BeautifulSoupScraper:
                     listing = self._parse_listing_card(card)
                     logger.debug("Card parsing time %s", time.time() - parse_start)
                     if listing:
-                        if listing["job_id"] != "" and listing["job_id"] in self.job_id_cache:
-                            logger.debug("Duplicate job found, skipping: %s", listing['job_id'])
-                            continue  # Skip duplicates
-                        if listing["job_id"] != "":
-                            self.job_id_cache.add(listing["job_id"])
+                        job_id = listing.get("job_id")
+                        if job_id:
+                            # Thread-safe check and add
+                            is_duplicate = False
+                            if self.job_id_lock:
+                                with self.job_id_lock:
+                                    if job_id in self.job_id_cache:
+                                        is_duplicate = True
+                                    else:
+                                        self.job_id_cache.add(job_id)
+                            else:
+                                # Fallback for single-threaded usage without lock being explicitly passed
+                                # (though ideally one should verify if single-threaded needs lock)
+                                if job_id in self.job_id_cache:
+                                    is_duplicate = True
+                                else:
+                                    self.job_id_cache.add(job_id)
+
+                            if is_duplicate:
+                                logger.debug("Duplicate job found, skipping: %s", job_id)
+                                continue
+
                         page_results.append(listing)
 
                 if len(page_results) > 0:
@@ -109,11 +146,13 @@ class BeautifulSoupScraper:
                     break
 
                 page += 1
-                human_delay(2, 4)
+                human_delay(1, 3)
 
             except requests.RequestException as e:
                 logger.error("Request error on page %s: %s", page + 1, e)
                 break
+            except ProxyRateLimitError:
+                raise  # Re-raise to be handled by caller
             except Exception as e:
                 logger.error("Error processing page %s: %s", page + 1, e)
                 page += 1  # Continue to next page on parsing errors
