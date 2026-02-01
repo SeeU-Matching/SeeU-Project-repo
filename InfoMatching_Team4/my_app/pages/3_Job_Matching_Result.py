@@ -13,9 +13,6 @@ from matching_utils import deleteResumeById, deleteJDById
 def main():
     st.markdown("<h1 style='font-size:24px;'>Job Matching Result</h1>", unsafe_allow_html=True)
 
-    # Add a text input for the student name
-    student_name = st.text_input("Enter Student Name to Filter Results")
-
     csv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../search_results.csv'))
     if not os.path.exists(csv_path):
         st.warning("No matching results found. (search_results.csv does not exist)")
@@ -73,10 +70,95 @@ def main():
         return
 
     df = pd.read_csv(csv_path)
-    if student_name:
-        filtered_df = df[df['name'].str.contains(student_name, case=False, na=False)]
+    
+    # Handle missing create_date column for old CSV files
+    if 'create_date' not in df.columns:
+        # Add create_date column with empty values for old records
+        df['create_date'] = ''
+
+    # Normalize types for filtering
+    if 'distance' in df.columns:
+        df['distance'] = pd.to_numeric(df['distance'], errors='coerce')
     else:
-        filtered_df = df
+        df['distance'] = pd.Series(dtype='float64')
+
+    df['_create_dt'] = pd.to_datetime(df.get('create_date', ''), errors='coerce')
+
+    # ----------------------------
+    # Filters
+    # ----------------------------
+    with st.expander("Filters", expanded=True):
+        c1, c2, c3 = st.columns(3)
+        name_query = c1.text_input("Student name contains", value="", placeholder="e.g. yudong / fang")
+        company_query = c2.text_input("Company contains", value="", placeholder="e.g. ripple / google")
+        title_query = c3.text_input("Job title contains", value="", placeholder="e.g. data")
+
+        dist_series = df['distance'].dropna()
+        if len(dist_series) > 0:
+            dist_min = float(dist_series.min())
+            dist_max = float(dist_series.max())
+            if dist_min == dist_max:
+                st.caption(f"All distances are the same: {dist_min:.4f}")
+                dist_low, dist_high = dist_min, dist_max
+            else:
+                step = max((dist_max - dist_min) / 200.0, 0.0001)
+                dist_low, dist_high = st.slider(
+                    "Distance range",
+                    min_value=dist_min,
+                    max_value=dist_max,
+                    value=(dist_min, dist_max),
+                    step=step,
+                )
+        else:
+            st.caption("No valid distance values found; distance filter disabled.")
+            dist_low, dist_high = None, None
+
+        date_series = df['_create_dt'].dropna()
+        date_mode = st.selectbox("Create date filter", ["Any", "Specific day", "Range"], index=0)
+        selected_day = None
+        selected_range = None
+        if date_mode != "Any":
+            if len(date_series) == 0:
+                st.warning("No valid create_date values found; date filter disabled.")
+                date_mode = "Any"
+            else:
+                min_day = date_series.min().date()
+                max_day = date_series.max().date()
+                if date_mode == "Specific day":
+                    selected_day = st.date_input("Select a day", value=max_day)
+                else:
+                    selected_range = st.date_input("Select a date range", value=(min_day, max_day))
+
+    # Apply filters
+    filtered_df = df.copy()
+    if name_query and 'name' in filtered_df.columns:
+        filtered_df = filtered_df[filtered_df['name'].astype(str).str.contains(name_query, case=False, na=False)]
+    if company_query and 'job_company' in filtered_df.columns:
+        filtered_df = filtered_df[filtered_df['job_company'].astype(str).str.contains(company_query, case=False, na=False)]
+    if title_query and 'job_title' in filtered_df.columns:
+        filtered_df = filtered_df[filtered_df['job_title'].astype(str).str.contains(title_query, case=False, na=False)]
+
+    if dist_low is not None and dist_high is not None:
+        # Keep NaN distances even when filtering (rare, but avoids hiding rows unexpectedly)
+        mask = filtered_df['distance'].isna() | filtered_df['distance'].between(dist_low, dist_high, inclusive='both')
+        filtered_df = filtered_df[mask]
+
+    if date_mode == "Specific day" and selected_day is not None:
+        filtered_df = filtered_df[filtered_df['_create_dt'].notna()]
+        filtered_df = filtered_df[filtered_df['_create_dt'].dt.date == selected_day]
+    elif date_mode == "Range" and selected_range is not None and isinstance(selected_range, (list, tuple)) and len(selected_range) == 2:
+        start_day, end_day = selected_range
+        filtered_df = filtered_df[filtered_df['_create_dt'].notna()]
+        filtered_df = filtered_df[
+            (filtered_df['_create_dt'].dt.date >= start_day) &
+            (filtered_df['_create_dt'].dt.date <= end_day)
+        ]
+
+    # Drop helper column from display (keep original create_date string)
+    if '_create_dt' in filtered_df.columns:
+        filtered_df = filtered_df.drop(columns=['_create_dt'])
+
+    st.caption(f"Showing {len(filtered_df)} / {len(df)} result(s).")
 
     if not filtered_df.empty:
         # Add Select column for deletion
@@ -93,7 +175,8 @@ def main():
                 "job_company": st.column_config.TextColumn("Company"),
                 "job_title": st.column_config.TextColumn("Job Title"),
                 "job_application_url": st.column_config.LinkColumn("Application URL"),
-                "distance": st.column_config.NumberColumn("Distance", format="%.4f")
+                "distance": st.column_config.NumberColumn("Distance", format="%.4f"),
+                "create_date": st.column_config.TextColumn("Create Date", help="Date when the match was created")
             },
             hide_index=True
         )
@@ -301,7 +384,7 @@ def main():
                 if st.button("✅ Confirm Delete All", type="primary"):
                     try:
                         # Create empty CSV with headers
-                        headers = ["Index", "name", "job_id", "job_company", "job_title", "job_application_url", "distance"]
+                        headers = ["Index", "name", "job_id", "job_company", "job_title", "job_application_url", "distance", "create_date"]
                         empty_df = pd.DataFrame(columns=headers)
                         empty_df.to_csv(csv_path, index=False)
                         
