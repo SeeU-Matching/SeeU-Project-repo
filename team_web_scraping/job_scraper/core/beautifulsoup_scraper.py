@@ -7,6 +7,7 @@ import re
 import requests
 from bs4 import BeautifulSoup
 from job_scraper.models import JobDetail, JobResult
+from job_scraper.models.enums import States
 from job_scraper.utils import create_session, human_delay
 
 logger = logging.getLogger(__name__)
@@ -53,7 +54,8 @@ class BeautifulSoupScraper:
         location: str,
         pages: int = None,  # None means fetch all available pages
         time_filter: str = "r86400",  # last 24h
-        experience_levels: str = "1,2,3"  # internship, entry, associate
+        experience_levels: str = "1,2,3",  # internship, entry, associate
+        enforce_united_states: bool = False
     ) -> List[Dict[str, str]]:
         """
         Fetch job listing URLs and basic info from LinkedIn.
@@ -75,9 +77,13 @@ class BeautifulSoupScraper:
         max_pages = pages if pages is not None else float('inf')
 
         while page < max_pages:
+            search_location = location
+            if enforce_united_states and "United States" not in search_location:
+                search_location += ", United States"
+
             params = {
                 "keywords": job_title,
-                "location": location,
+                "location": search_location,
                 "start": page * 10,
                 "f_TPR": time_filter,
                 "f_E": experience_levels,
@@ -130,8 +136,14 @@ class BeautifulSoupScraper:
                                 else:
                                     self.job_id_cache.add(job_id)
 
-                            if is_duplicate:
-                                logger.debug("Duplicate job found, skipping: %s", job_id)
+                                if is_duplicate:
+                                    logger.debug("Duplicate job found, skipping: %s", job_id)
+                                    continue
+
+                        if enforce_united_states:
+                            loc_text = listing.get("location", "")
+                            if not self._is_us_location(loc_text):
+                                logger.debug("Skipping non-US location: %s", loc_text)
                                 continue
 
                         page_results.append(listing)
@@ -160,6 +172,52 @@ class BeautifulSoupScraper:
 
         logger.debug("Total listings fetched: %s", len(results))
         return results
+
+    def _is_us_location(self, location: str) -> bool:
+        """
+        Check if the location string is likely within the US.
+        From observation, correct location is either like "Idaho, United States"
+        or "Huntsville, AL"
+        
+        Args:
+            location: Location string from LinkedIn (e.g. "New York, NY", "Berlin, Germany")
+            
+        Returns:
+            True if it looks like a US location, False otherwise
+        """
+        if not location:
+            return False
+
+        # 1. Check for explicit "United States"
+        if "United States" in location:
+            return True
+
+        # 2. Check for state abbreviations at the end
+        parts = [p.strip() for p in location.split(",")]
+
+        if not parts:
+            return False
+
+        last_part = parts[-1]
+
+        # Check against known US state codes
+        if len(last_part) == 2 and last_part.upper() in [s.value for s in States]:
+            return True
+
+        if len(parts) >= 3:
+            # If 3 parts, the last part MUST be United States literally, which we caught in check #1.
+            # So if we are here (not caught by #1), and have 3 parts, it's likely foreign.
+            return False
+
+        if len(parts) == 2:
+            if len(last_part) == 2:
+                # We already checked state codes above. If it was a state code, it returned True.
+                # So here it is a 2-letter code that is NOT a US state (e.g. "UK"?).
+                pass
+            else:
+                pass
+
+        return True
 
     def _parse_listing_card(self, card) -> Optional[Dict[str, str]]:
         """
