@@ -146,7 +146,7 @@ class BeautifulSoupScraper:
                     break
 
                 page += 1
-                human_delay(1, 3)
+                human_delay(2, 5)
 
             except requests.RequestException as e:
                 logger.error("Request error on page %s: %s", page + 1, e)
@@ -240,7 +240,7 @@ class BeautifulSoupScraper:
                     else f"https://www.linkedin.com/jobs/view/{job_data.get('job_id')}"
             )
             results.append(job_result)
-            human_delay(2, 5)
+            human_delay(1, 3)
 
         return results
 
