@@ -1,4 +1,7 @@
+import logging
 from job_scraper.service import JobScraperService
+
+logging.basicConfig(level=logging.DEBUG)
 
 def example_1_basic_scraping():
     """Basic example: Scrape jobs and export to CSV."""
@@ -79,7 +82,7 @@ def main():
 
     try:
         # Run examples
-        example_2_get_jobs_as_data()
+        # example_2_get_jobs_as_data()
         example_1_basic_scraping()
         # example_3_with_selenium()
 

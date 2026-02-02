@@ -1,19 +1,20 @@
 import time
+import logging
 from job_scraper.service import JobScraperService
 from job_scraper.utils.keyword_loader import load_job_keywords
+
+logging.basicConfig(level=logging.INFO)
 
 def test_simple():
     scraper = JobScraperService()
 
     job_titles = [
         "software engineer",
-        "data scientist",
         "product manager"
     ]
 
     locations = [
         "New York, NY",
-        "San Francisco, CA",
     ]
 
     # calculate start time
@@ -41,18 +42,21 @@ def test_medium():
         if i >= 2:
             break
 
+    print(f"Num of Job titles: {len(job_titles)}")
+
     locations = [
         "New York, NY",
-        "San Francisco, CA",
+        # "San Francisco, CA",
     ]
 
+    print("Start testing")
     # calculate start time
     start_time = time.time()
     scraper.scrape_and_export_batch(
         job_titles=job_titles,
         locations=locations,
         output_file="jobs_medium.csv",
-        pages=2
+        pages=1
     )
     end_time = time.time()
     print(f"Batch scraping completed in {end_time - start_time:.2f} seconds.")

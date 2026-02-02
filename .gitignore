@@ -77,3 +77,6 @@ desktop.ini
 .Spotlight-V100
 .TemporaryItems
 
+# proxy file
+*proxies.json
+
