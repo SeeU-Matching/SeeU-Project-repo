@@ -48,17 +48,17 @@ class BeautifulSoupScraper:
         """Clear the job ID cache to avoid infinite growth."""
         self.job_id_cache.clear()
 
-    def get_listings(
+    def yield_listings_pages(
         self,
         job_title: str,
         location: str,
-        pages: int = None,  # None means fetch all available pages
-        time_filter: str = "r86400",  # last 24h
-        experience_levels: str = "1,2,3",  # internship, entry, associate
+        pages: int = None,
+        time_filter: str = "r86400",
+        experience_levels: str = "1,2,3",
         enforce_united_states: bool = False
-    ) -> List[Dict[str, str]]:
+    ):
         """
-        Fetch job listing URLs and basic info from LinkedIn.
+        Yield job listings page by page from LinkedIn.
         
         Args:
             job_title: Job title/keywords to search
@@ -69,10 +69,9 @@ class BeautifulSoupScraper:
             experience_levels: Comma-separated experience levels 
                 (1=internship, 2=entry, 3=associate)
         
-        Returns:
-            List of dictionaries with keys: job_id, url, title, company, location
+        Yields:
+             List of dictionaries with job data for the current page
         """
-        results: List[Dict[str, str]] = []
         page = 0
         max_pages = pages if pages is not None else float('inf')
 
@@ -130,7 +129,6 @@ class BeautifulSoupScraper:
                                         self.job_id_cache.add(job_id)
                             else:
                                 # Fallback for single-threaded usage without lock being explicitly passed
-                                # (though ideally one should verify if single-threaded needs lock)
                                 if job_id in self.job_id_cache:
                                     is_duplicate = True
                                 else:
@@ -149,8 +147,8 @@ class BeautifulSoupScraper:
                         page_results.append(listing)
 
                 if len(page_results) > 0:
-                    results.extend(page_results)
-                    logger.debug("Found %s listings on page %s", len(page_results), page + 1)
+                    yield page_results
+                    logger.debug("Yielded %s listings from page %s", len(page_results), page + 1)
 
                 if len(cards) < 10:
                     logger.debug("Page %s had fewer than 10 results (%s), \
@@ -170,6 +168,25 @@ class BeautifulSoupScraper:
                 page += 1  # Continue to next page on parsing errors
                 continue
 
+    def get_listings(
+        self,
+        job_title: str,
+        location: str,
+        pages: int = None,
+        time_filter: str = "r86400",
+        experience_levels: str = "1,2,3",
+        enforce_united_states: bool = False
+    ) -> List[Dict[str, str]]:
+        """
+        Fetch job listing URLs and basic info from LinkedIn.
+        Wrapper around yield_listings_pages for backward compatibility.
+        """
+        results = []
+        for page_results in self.yield_listings_pages(
+            job_title, location, pages, time_filter, experience_levels, enforce_united_states
+        ):
+            results.extend(page_results)
+        
         logger.debug("Total listings fetched: %s", len(results))
         return results
 
@@ -315,6 +332,10 @@ class BeautifulSoupScraper:
         try:
             resp = self.session.get(url, timeout=self.timeout)
 
+            if resp.status_code == 429:
+                logger.warning("Rate limit exceeded (429) fetching details for %s", url)
+                raise ProxyRateLimitError("Rate limit exceeded during detail fetch")
+
             if resp.status_code != 200:
                 return JobDetail()
 
@@ -362,6 +383,8 @@ class BeautifulSoupScraper:
         except requests.RequestException as e:
             logger.error("Request error fetching details from %s: %s", url, e)
             return JobDetail()
+        except ProxyRateLimitError:
+            raise
         except Exception as e:
             logger.error("Error parsing job details from %s: %s", url, e)
             return JobDetail()
