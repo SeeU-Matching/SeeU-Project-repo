@@ -14,7 +14,7 @@ def test_medium():
     job_titles = []
 
     for _, keywords in KEYWORDS.items():
-        job_titles.extend(keywords)
+        job_titles.extend(keywords[:1])
 
     print(f"Num of Job titles: {len(job_titles)}")
 
@@ -26,11 +26,12 @@ def test_medium():
     # calculate start time
     start_time = time.time()
     scraper.scrape_and_export_batch(
-        job_titles=job_titles,
+        job_titles=job_titles[:2],
         locations=locations,
-        output_file="jobs_multithread_full_2.csv",
+        output_file="jobs_multithread_small.csv",
         pages=None,
-        threads=10,
+        detail_threads=10,
+        search_threads=2,
         proxy_file="proxies.json"
     )
     end_time = time.time()

@@ -55,7 +55,7 @@ class BeautifulSoupScraper:
         pages: int = None,
         time_filter: str = "r86400",
         experience_levels: str = "1,2,3",
-        enforce_united_states: bool = False
+        enforce_united_states: bool = True
     ):
         """
         Yield job listings page by page from LinkedIn.
@@ -134,9 +134,14 @@ class BeautifulSoupScraper:
                                 else:
                                     self.job_id_cache.add(job_id)
 
-                                if is_duplicate:
-                                    logger.debug("Duplicate job found, skipping: %s", job_id)
-                                    continue
+                            if is_duplicate:
+                                logger.debug("Duplicate job found, skipping: %s", job_id)
+                                continue
+                        else:
+                            # If we cannot parse a job ID, we can't dedup it safely.
+                            # Better to skip than to have broken/duplicate rows.
+                            logger.warning("Could not parse job ID for URL: %s", listing.get("url"))
+                            continue
 
                         if enforce_united_states:
                             loc_text = listing.get("location", "")
@@ -186,7 +191,7 @@ class BeautifulSoupScraper:
             job_title, location, pages, time_filter, experience_levels, enforce_united_states
         ):
             results.extend(page_results)
-        
+
         logger.debug("Total listings fetched: %s", len(results))
         return results
 
@@ -257,7 +262,9 @@ class BeautifulSoupScraper:
             location = card.select_one("span.job-search-card__location").get_text(strip=True)
 
             # Extract job ID from URL
-            match = re.search(r"/jobs/view/.*?(\d+)", url)
+            # Url format is usually: .../view/slug-<jobId>?... or .../view/<jobId>
+            # Need the last numeric sequence in the path
+            match = re.search(r"(\d+)/?$", url.split("?")[0])
             job_id = match.group(1) if match else ""
 
             return {
@@ -286,7 +293,7 @@ class BeautifulSoupScraper:
             url = listing.get("url")
             if not url:
                 continue
-            
+
             detail_start = time.time()
             job_detail = self._fetch_job_detail(url)
             logger.debug("Fetch detail time %s", time.time() - detail_start)
@@ -312,7 +319,9 @@ class BeautifulSoupScraper:
                 apply_url=job_data.get("apply_url"),
                 industry=job_data.get("industry"),
                 job_url="" if job_data.get("job_id") == "" \
-                    else f"https://www.linkedin.com/jobs/view/{job_data.get('job_id')}"
+                    else f"https://www.linkedin.com/jobs/view/{job_data.get('job_id')}",
+                search_title=job_data.get("search_title"),
+                search_location=job_data.get("search_location")
             )
             results.append(job_result)
             human_delay(1, 3)

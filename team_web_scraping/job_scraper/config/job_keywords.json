@@ -5,53 +5,83 @@
     "frontend engineer",
     "full stack engineer",
     "platform engineer",
-    "devops",
-    "security engineer"
+    "site reliability engineer",
+    "devops engineer",
+    "cloud engineer",
+    "security engineer",
+    "application developer"
   ],
+
   "data_ai": [
     "data scientist",
     "data analyst",
-    "machine learning",
+    "machine learning engineer",
     "ai engineer",
-    "quant"
+    "research scientist machine learning",
+    "quantitative analyst",
+    "quantitative researcher",
+    "applied scientist"
   ],
+
   "finance": [
-    "finance",
-    "trading",
-    "investment",
-    "portfolio"
+    "financial analyst",
+    "investment analyst",
+    "quantitative finance",
+    "portfolio manager",
+    "risk analyst",
+    "trading analyst"
   ],
+
   "business_marketing": [
-    "marketing",
     "business analyst",
-    "strategy",
-    "operations"
+    "management consultant",
+    "strategy consultant",
+    "operations analyst",
+    "marketing analyst",
+    "growth marketing manager"
   ],
+
   "product": [
     "product manager",
-    "program manager"
+    "technical product manager",
+    "program manager",
+    "project manager"
   ],
+
   "legal_compliance": [
-    "legal",
-    "compliance",
-    "regulatory"
+    "compliance analyst",
+    "regulatory analyst",
+    "legal counsel",
+    "corporate attorney",
+    "privacy officer"
   ],
+
   "design": [
-    "ux",
-    "ui",
-    "product designer"
+    "ux designer",
+    "ui designer",
+    "product designer",
+    "interaction designer",
+    "ux researcher"
   ],
+
   "research": [
-    "research"
+    "research scientist",
+    "research engineer",
+    "applied researcher"
   ],
+
   "life_science": [
-    "biotech",
-    "clinical",
-    "pharma"
+    "biotech scientist",
+    "clinical research associate",
+    "clinical scientist",
+    "pharmaceutical scientist",
+    "bioinformatics scientist"
   ],
+
   "hr": [
-    "recruiting",
-    "human resources",
-    "talent"
+    "technical recruiter",
+    "talent acquisition specialist",
+    "hr business partner",
+    "people operations manager"
   ]
 }

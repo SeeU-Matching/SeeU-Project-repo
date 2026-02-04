@@ -1,0 +1,15 @@
+services:
+  scraper:
+    build: .
+    
+    image: seeu-scraper
+    volumes:
+      - ./proxies.json:/app/proxies.json:ro
+      - ./output:/app/output
+    environment:
+      PROXY_LIST_JSON: /app/proxies.json
+      OUTPUT_DIR: /app/output
+      DRY_RUN: "true"
+      SEARCH_THREADS: "3"
+      DETAIL_THREADS: "10"
+      S3_BUCKET_NAME: "Not available now"

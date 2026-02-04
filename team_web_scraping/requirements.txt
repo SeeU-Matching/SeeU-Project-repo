@@ -1,0 +1,9 @@
+selenium
+pydantic>=2.0
+uvicorn
+requests
+beautifulsoup4
+webdriver-manager
+python-dotenv
+boto3
+tenacity

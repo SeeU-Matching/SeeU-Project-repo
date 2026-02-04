@@ -15,6 +15,8 @@ def save_jobs_to_csv(jobs: List[JobResult], file_path: str ="jobs.csv", mode: st
         "job_url",
         "apply_url",
         "industry",
+        "search_title",
+        "search_location",
     ]
 
     with open(file_path, mode, newline="", encoding="utf-8") as f:
