@@ -3,7 +3,7 @@ from datetime import datetime
 import logging
 import boto3
 from job_scraper import ConcurrentJobScraperService
-from job_scraper.models.enums import States
+from job_scraper.models.enums import States, ExperienceLevel
 from job_scraper.utils.keyword_loader import load_job_keywords
 
 # Configure logging
@@ -46,9 +46,12 @@ def run_job():
         limit_loc = int(os.environ.get("LIMIT_LOCATIONS"))
         locations = locations[:limit_loc]
         logger.info("Limiting to first %s locations.", limit_loc)
+    
+    # Experience Levels
+    experience_levels = [ExperienceLevel.INTERNSHIP.value, ExperienceLevel.ENTRY_LEVEL.value, ExperienceLevel.ASSOCIATE.value]
 
-    logger.warning("Starting batch job used %s titles and %s locations.", \
-                len(job_titles), len(locations))
+    logger.warning("Starting batch job used %s titles, %s locations, and %s experience levels.", \
+                len(job_titles), len(locations), len(experience_levels))
 
     # 3. Run Scraper
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -68,7 +71,8 @@ def run_job():
             pages=pages,
             search_threads=search_threads,
             detail_threads=detail_threads,
-            proxy_file=proxy_list_json
+            proxy_file=proxy_list_json,
+            experience_levels=experience_levels
         )
     except KeyboardInterrupt:
         logger.warning("Batch job cancelled by user.")

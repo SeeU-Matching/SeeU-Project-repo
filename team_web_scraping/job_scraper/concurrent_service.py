@@ -6,8 +6,7 @@ import threading
 import time
 from queue import Queue, Empty
 from typing import Iterable, Dict, Optional, Any, List
-from job_scraper.core import BeautifulSoupScraper
-from job_scraper.core import ProxyRateLimitError
+from job_scraper.core import BeautifulSoupScraper, ProxyConnectionError, ProxyRateLimitError
 from job_scraper.utils import save_jobs_to_csv
 from job_scraper.utils.proxy_manager import ProxyManager, load_proxies_from_json
 from tenacity import (
@@ -48,7 +47,7 @@ class ConcurrentJobScraperService:
         output_file: str,
         pages: int = 1,
         time_filter: str = "r86400",
-        experience_levels: str = "1,2,3",
+        experience_levels: Iterable[str] = ("1", "2", "3"),
         detail_threads: int = 4,
         search_threads: int = 1,
         proxies: Optional[List[Dict[str, str]]] = None,
@@ -63,7 +62,7 @@ class ConcurrentJobScraperService:
             output_file: Path to output CSV file
             pages: Number of pages to fetch (25 results per page)
             time_filter: Time filter (r86400=24h, r604800=week, r2592000=month)
-            experience_levels: Comma-separated levels (1=internship, 2=entry, 3=associate)
+            experience_levels: List of experience levels (1=internship, 2=entry, 3=associate)
             threads: Number of concurrent threads to use (default: 4)
             detail_threads: Number of concurrent threads for fetching job details (default: 4)
             search_threads: Number of concurrent threads for searching job listings (default: 1)
@@ -102,14 +101,18 @@ class ConcurrentJobScraperService:
             _execute_search_task(task_item)
 
         @retry(
-            retry=retry_if_exception_type(ProxyRateLimitError),
+            retry=retry_if_exception_type((ProxyRateLimitError, ProxyConnectionError)),
             stop=stop_after_attempt(2),
             wait=wait_random(min=5, max=10),
             before_sleep=before_sleep_log(logger, logging.WARNING),
             reraise=True
         )
-        def _execute_search_task(task_item):
-            t_title, t_location = task_item
+        def _execute_search_task(task_item: dict):
+            t_title = task_item["title"] 
+            t_location = task_item["location"]
+            t_exp = task_item["exp"]
+            last_page = task_item.get("page", 0)
+
             current_proxy = main_proxy_manager.get_proxy() if main_proxy_manager else None
 
             if main_proxy_manager and not current_proxy and proxies:
@@ -130,12 +133,17 @@ class ConcurrentJobScraperService:
 
                 found_any = False
                 # Stream pages into queue
-                for page_results in scraper.yield_listings_pages(
-                    job_title=t_title,
-                    location=t_location,
-                    pages=pages,
-                    time_filter=time_filter,
-                    experience_levels=experience_levels,
+
+                for page_idx, page_results in enumerate(
+                    scraper.yield_listings_pages(
+                        job_title=t_title,
+                        location=t_location,
+                        pages=pages,
+                        time_filter=time_filter,
+                        experience_levels=t_exp,
+                        start_page=last_page,
+                    ),
+                    start=last_page
                 ):
                     if self.stop_event.is_set():
                         break
@@ -145,15 +153,27 @@ class ConcurrentJobScraperService:
                         for job in page_results:
                             job["search_title"] = t_title
                             job["search_location"] = t_location
-                        listing_queue.put(page_results)
+                            job["experience_level"] = t_exp
+                        listing_queue.put({
+                            "listings": page_results,
+                            "detail_idx": 0,
+                        })
                         found_any = True
 
-                if not found_any:
-                    logger.info("No new jobs found for %s in %s.", t_title, t_location)
+                    task_item["page"] = page_idx + 1
 
+                if not found_any:
+                    logger.info("No new jobs found for %s in %s (Exp: %s).", t_title, t_location, t_exp)
+
+            except ProxyConnectionError:
+                if main_proxy_manager and current_proxy:
+                    logger.warning("Proxy Error (Search). Marking bad. Retry from page %s", task_item.get("page", 0))
+                    main_proxy_manager.mark_bad(current_proxy)
+                # Re-raise to trigger Tenacity retry
+                raise
             except ProxyRateLimitError:
                 if main_proxy_manager and current_proxy:
-                    logger.warning("Rate limit (Search) with proxy. Marking bad.")
+                    logger.warning("Rate limit (Search). Marking bad. Retry from page %s", task_item.get("page", 0))
                     main_proxy_manager.mark_bad(current_proxy)
                 # Re-raise to trigger Tenacity retry
                 raise
@@ -185,24 +205,37 @@ class ConcurrentJobScraperService:
                     listing_queue.task_done()
                     break
 
+                batch_data = batch["listings"]
+                start_idx = batch["detail_idx"]
+
                 try:
                     for attempt in Retrying(
-                        retry=retry_if_exception_type(ProxyRateLimitError),
+                        retry=retry_if_exception_type((ProxyRateLimitError, ProxyConnectionError)),
                         stop=stop_after_attempt(3),
                         wait=wait_random(min=5, max=10),
                         before_sleep=before_sleep_log(logger, logging.WARNING)
                     ):
                         with attempt:
                             try:
-                                detailed_jobs = scraper.fetch_details(batch)
+                                results, next_idx = scraper.fetch_details(
+                                    listings=batch_data,
+                                    start_idx=start_idx
+                                )
 
-                                if detailed_jobs:
+                                if results:
                                     with csv_write_lock:
-                                        save_jobs_to_csv(detailed_jobs, output_file, mode="a", write_header=False)
-                                    logger.info("Saved %d detailed jobs (Consumer Pipeline)", len(detailed_jobs))
+                                        save_jobs_to_csv(results, output_file, mode="a", write_header=False)
+                                    logger.info("Saved %d detailed jobs (Consumer Pipeline)", len(results))
+                                
+                                batch["detail_idx"] = next_idx
+                                if batch["detail_idx"] < len(batch_data):
+                                    raise ProxyConnectionError("Partial batch, retrying")
 
-                            except ProxyRateLimitError:
-                                logger.warning("Rate limit hit in Detail Consumer. Rotating proxy.")
+                            except (ProxyRateLimitError, ProxyConnectionError) as e:
+                                if isinstance(e, ProxyRateLimitError):
+                                    logger.warning("Rate limit in Detail Consumer. Rotating proxy. Retry from index %s", batch["detail_idx"])
+                                elif isinstance(e, ProxyConnectionError):
+                                    logger.warning("Proxy connection error in Detail Consumer. Rotating proxy. Retry from index %s", batch["detail_idx"])
 
                                 if main_proxy_manager and current_proxy:
                                     main_proxy_manager.mark_bad(current_proxy)
@@ -226,7 +259,14 @@ class ConcurrentJobScraperService:
 
         # --- EXECUTION PHASE ---
 
-        work_items = [(title, loc) for title in job_titles for loc in locations]
+        work_items = [
+            {
+                "title" : title, 
+                "location": loc, 
+                "exp": exp,
+                "page": 0
+            }  for title in job_titles for loc in locations for exp in experience_levels
+        ]
 
         # 1. Start Consumer Pool (Detail Fetchers)
         # We'll use the same number of threads for fetching as searching, or maybe slightly more?

@@ -79,10 +79,10 @@ class JobScraperService:
             except ValueError as e:
                 logger.warning("Failed to initialize Selenium: %s", e)
                 logger.info("Use BeautifulSoup instead")
-                jobs = self.bs_scraper.fetch_details(listings)
+                jobs, _ = self.bs_scraper.fetch_details(listings)
         else:
             logger.info("Fetching job details using BeautifulSoup...")
-            jobs = self.bs_scraper.fetch_details(listings)
+            jobs, _ = self.bs_scraper.fetch_details(listings)
 
         logger.info("Successfully scraped %s jobs.", len(jobs))
         return jobs

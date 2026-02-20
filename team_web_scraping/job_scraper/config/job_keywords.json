@@ -1,87 +1,105 @@
 {
   "software_engineering": [
-    "software engineer",
-    "backend engineer",
-    "frontend engineer",
-    "full stack engineer",
-    "platform engineer",
-    "site reliability engineer",
-    "devops engineer",
-    "cloud engineer",
-    "security engineer",
-    "application developer"
+    "iOS application engineer",
+    "Android application engineer",
+    "mobile application developer",
+    "software application developer",
+    "embedded software engineer",
+    "firmware embedded engineer",
+    "computer systems engineer",
+    "DevOps platform engineer",
+    "cloud infrastructure engineer",
+    "software test automation engineer",
+    "technical support engineer software"
   ],
 
   "data_ai": [
-    "data scientist",
-    "data analyst",
-    "machine learning engineer",
-    "ai engineer",
-    "research scientist machine learning",
-    "quantitative analyst",
-    "quantitative researcher",
-    "applied scientist"
+    "data pipeline engineer",
+    "ETL data developer",
+    "enterprise data architect",
+    "machine learning operations engineer",
+    "AI platform infrastructure engineer",
+    "computer vision machine learning engineer",
+    "natural language processing engineer",
+    "robotics software engineer",
+    "autonomous systems software engineer"
   ],
 
   "finance": [
-    "financial analyst",
-    "investment analyst",
-    "quantitative finance",
-    "portfolio manager",
-    "risk analyst",
-    "trading analyst"
+    "financial risk management analyst",
+    "corporate financial management analyst",
+    "cost accounting analyst",
+    "credit risk analyst",
+    "corporate treasury analyst",
+    "equity research analyst",
+    "asset management analyst"
   ],
 
   "business_marketing": [
-    "business analyst",
-    "management consultant",
-    "strategy consultant",
-    "operations analyst",
-    "marketing analyst",
-    "growth marketing manager"
+    "digital marketing specialist",
+    "business operations analyst",
+    "operations research analyst",
+    "business systems analyst IT",
+    "business intelligence analyst",
+    "business solutions consultant",
+    "business insights analyst",
+    "influencer marketing specialist",
+    "creative marketing strategist",
+    "content marketing producer",
+    "affiliate marketing manager",
+    "performance marketing analyst"
   ],
 
   "product": [
-    "product manager",
-    "technical product manager",
-    "program manager",
-    "project manager"
+    "technical product support engineer",
+    "product development engineer",
+    "program management professional",
+    "project management professional",
+    "product implementation consultant"
   ],
 
   "legal_compliance": [
-    "compliance analyst",
-    "regulatory analyst",
-    "legal counsel",
-    "corporate attorney",
-    "privacy officer"
+    "regulatory compliance auditor",
+    "regulatory affairs specialist medical",
+    "data privacy compliance manager",
+    "anti money laundering compliance analyst"
   ],
 
   "design": [
-    "ux designer",
-    "ui designer",
-    "product designer",
-    "interaction designer",
-    "ux researcher"
+    "user experience UX designer",
+    "user interface UI designer",
+    "visual graphic designer",
+    "digital media designer",
+    "product experience designer",
+    "design verification engineer"
   ],
 
   "research": [
-    "research scientist",
-    "research engineer",
-    "applied researcher"
+    "academic research assistant",
+    "scientific research support specialist",
+    "clinical research coordinator"
   ],
 
   "life_science": [
-    "biotech scientist",
-    "clinical research associate",
-    "clinical scientist",
-    "pharmaceutical scientist",
-    "bioinformatics scientist"
+    "biometrics data scientist",
+    "biological laboratory technician",
+    "biomedical science researcher",
+    "biotechnology research scientist",
+    "biological sciences researcher",
+    "molecular biology scientist",
+    "research and development scientist",
+    "biomedical engineering specialist",
+    "healthcare management consultant",
+    "biostatistics analyst"
   ],
 
   "hr": [
-    "technical recruiter",
-    "talent acquisition specialist",
-    "hr business partner",
-    "people operations manager"
+    "human resources information systems analyst",
+    "human resources operations manager",
+    "talent management specialist",
+    "human resources business partner HRBP",
+    "compensation and benefits specialist",
+    "employee relations specialist",
+    "technical recruiter"
   ]
 }

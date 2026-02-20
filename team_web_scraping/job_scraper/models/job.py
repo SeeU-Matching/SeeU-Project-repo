@@ -24,6 +24,7 @@ class JobResult(BaseModel):
     industry: Optional[str]
     search_title: Optional[str] = None
     search_location: Optional[str] = None
+    experience_level: Optional[str] = None
 
 class JobDetail(BaseModel):
     description: str = ""
