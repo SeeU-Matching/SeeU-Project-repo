@@ -24,14 +24,16 @@ class SponsorChecker:
         if norm in self.h1b_found:
             result['h1b'] = self.h1b_found[norm]
         else:
-            result['h1b'] = self._match(norm, self.h1b_list, threshold_sort, threshold_set)
-            self.h1b_found[norm] = result['h1b']
+            h1b_result = self._match(norm, self.h1b_list, threshold_sort, threshold_set)
+            self.h1b_found[norm] = h1b_result['match']
+            result['h1b'] = h1b_result['match']
 
         if norm in self.everify_found:
             result['everify'] = self.everify_found[norm]
         else:   
-            result['everify'] = self._match(norm, self.everify_list, threshold_sort, threshold_set)
-            self.everify_found[norm] = result['everify']
+            everify_result = self._match(norm, self.everify_list, threshold_sort, threshold_set)
+            self.everify_found[norm] = everify_result['match']
+            result['everify'] = everify_result['match']
 
         return result
 

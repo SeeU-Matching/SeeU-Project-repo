@@ -10,6 +10,7 @@ def test_medium():
     scraper = ConcurrentJobScraperService()
 
     job_titles = [("software engineer", "iOS application engineer")]
+    job_titles_2 = [("software engineer", "(\"iOS Engineer\" OR \"iOS Developer\") AND (Swift OR UIKit OR SwiftUI) NOT (Android OR intern OR volunteer OR VP OR \"senior director\")")]
 
     print(f"Num of Job titles: {len(job_titles)}")
 
@@ -18,23 +19,23 @@ def test_medium():
         locations.append(state.value)
 
     print("Start testing")
-    # # calculate start time
-    # start_time = time.time()
-    # scraper.scrape_and_export_batch(
-    #     job_titles=job_titles,
-    #     locations=locations,
-    #     output_file="jobs_1.csv",
-    #     pages=1,
-    #     detail_threads=10,
-    #     search_threads=2,
-    #     proxy_file="proxies.json"
-    # )
-    # end_time = time.time()
-    # print(f"Multi-thread batch scraping completed in {end_time - start_time:.2f} seconds.")
+    # calculate start time
+    start_time = time.time()
+    scraper.scrape_and_export_batch(
+        job_titles=job_titles,
+        locations=locations,
+        output_file="jobs_1.csv",
+        pages=1,
+        detail_threads=10,
+        search_threads=2,
+        proxy_file="proxies.json"
+    )
+    end_time = time.time()
+    print(f"Multi-thread batch scraping completed in {end_time - start_time:.2f} seconds.")
 
     start_time = time.time()
     scraper.scrape_and_export_batch(
-        job_titles=[(category, "\"" + title +"\"") for category, title in job_titles],
+        job_titles=job_titles_2,
         locations=locations,
         output_file="jobs_2.csv",
         pages=1,

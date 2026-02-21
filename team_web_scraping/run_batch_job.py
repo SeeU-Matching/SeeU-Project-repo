@@ -36,7 +36,7 @@ def run_job():
     # flattened list of all keywords
     for category, kws in keywords_map.items():
         for kw in kws:
-            job_titles.extend((category, kw))
+            job_titles.append((category.value, kw))
 
     # Optional: Limit job titles for testing if env var set
     if os.environ.get("LIMIT_KEYWORDS"):
