@@ -5,12 +5,18 @@ from urllib.parse import unquote
 from typing import List, Dict, Optional, Any
 import re
 import requests
+from requests.exceptions import ProxyError
 from bs4 import BeautifulSoup
 from job_scraper.models import JobDetail, JobResult
-from job_scraper.models.enums import States
+from job_scraper.models.enums import ExperienceLevel, States
 from job_scraper.utils import create_session, human_delay
 
 logger = logging.getLogger(__name__)
+
+
+class ProxyConnectionError(Exception):
+    """Raised when a proxy connection fails."""
+    pass
 
 
 class ProxyRateLimitError(Exception):
@@ -55,7 +61,8 @@ class BeautifulSoupScraper:
         pages: int = None,
         time_filter: str = "r86400",
         experience_levels: str = "1,2,3",
-        enforce_united_states: bool = True
+        enforce_united_states: bool = True,
+        start_page: int = 0, 
     ):
         """
         Yield job listings page by page from LinkedIn.
@@ -72,7 +79,7 @@ class BeautifulSoupScraper:
         Yields:
              List of dictionaries with job data for the current page
         """
-        page = 0
+        page = start_page
         max_pages = pages if pages is not None else float('inf')
 
         while page < max_pages:
@@ -163,6 +170,9 @@ class BeautifulSoupScraper:
                 page += 1
                 human_delay(2, 5)
 
+            except ProxyError as e:
+                logger.error("Proxy error on page %s: %s", page + 1, e)
+                raise ProxyConnectionError(f"Proxy connection failed: {e}")
             except requests.RequestException as e:
                 logger.error("Request error on page %s: %s", page + 1, e)
                 break
@@ -277,7 +287,7 @@ class BeautifulSoupScraper:
         except (AttributeError, KeyError, TypeError):
             return None
 
-    def fetch_details(self, listings: List[Dict[str, str]]) -> List[JobResult]:
+    def fetch_details(self, listings: List[Dict[str, str]], start_idx = 0) -> tuple[List[JobResult], int]:
         """
         Fetch detailed information for each job listing.
         
@@ -289,44 +299,51 @@ class BeautifulSoupScraper:
         """
         results = []
 
-        for listing in listings:
-            url = listing.get("url")
-            if not url:
-                continue
+        for i in range(start_idx, len(listings)):
+            try:
+                listing = listings[i]
+                url = listing.get("url")
+                if not url:
+                    i += 1
+                    continue
 
-            detail_start = time.time()
-            job_detail = self._fetch_job_detail(url)
-            logger.debug("Fetch detail time %s", time.time() - detail_start)
+                detail_start = time.time()
+                job_detail = self._fetch_job_detail(url)
+                logger.debug("Fetch detail time %s", time.time() - detail_start)
 
-            job_data = {
-                **listing,
-                "description": job_detail.description,
-                "apply_url": job_detail.apply_url,
-                "industry": job_detail.industry,
-            }
+                job_data = {
+                    **listing,
+                    "description": job_detail.description,
+                    "apply_url": job_detail.apply_url,
+                    "industry": job_detail.industry,
+                }
 
-            # Use detailed title/company if available and different
-            if job_detail.title and job_detail.title != listing.get("title"):
-                job_data["title"] = job_detail.title
-            if job_detail.company and job_detail.company != listing.get("company"):
-                job_data["company"] = job_detail.company
+                # Use detailed title/company if available and different
+                if job_detail.title and job_detail.title != listing.get("title"):
+                    job_data["title"] = job_detail.title
+                if job_detail.company and job_detail.company != listing.get("company"):
+                    job_data["company"] = job_detail.company
 
-            job_result = JobResult(
-                title=job_data.get("title"),
-                company=job_data.get("company"),
-                location=job_data.get("location"),
-                description=job_data.get("description"),
-                apply_url=job_data.get("apply_url"),
-                industry=job_data.get("industry"),
-                job_url="" if job_data.get("job_id") == "" \
-                    else f"https://www.linkedin.com/jobs/view/{job_data.get('job_id')}",
-                search_title=job_data.get("search_title"),
-                search_location=job_data.get("search_location")
-            )
-            results.append(job_result)
-            human_delay(1, 3)
+                job_result = JobResult(
+                    title=job_data.get("title"),
+                    company=job_data.get("company"),
+                    location=job_data.get("location"),
+                    description=job_data.get("description"),
+                    apply_url=job_data.get("apply_url"),
+                    industry=job_data.get("industry"),
+                    job_url="" if job_data.get("job_id") == "" \
+                        else f"https://www.linkedin.com/jobs/view/{job_data.get('job_id')}",
+                    search_title=job_data.get("search_title"),
+                    search_location=job_data.get("search_location"),
+                    experience_level=ExperienceLevel(job_data.get("experience_level")).name
+                )
+                results.append(job_result)
+                human_delay(1, 3)
+            except (ProxyConnectionError, ProxyRateLimitError):
+                logger.warning("Stopping detail fetch at index %s due to proxy issues.", i)
+                return results, i
 
-        return results
+        return results, i + 1
 
     def _fetch_job_detail(self, url: str) -> JobDetail:
         """
@@ -389,6 +406,9 @@ class BeautifulSoupScraper:
                 title=title,
                 company=company)
 
+        except ProxyError as e:
+            logger.error("Proxy error fetching details from %s: %s", url, e)
+            raise ProxyConnectionError(f"Proxy connection failed during detail fetch: {e}")
         except requests.RequestException as e:
             logger.error("Request error fetching details from %s: %s", url, e)
             return JobDetail()
