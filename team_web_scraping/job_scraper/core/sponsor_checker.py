@@ -12,14 +12,28 @@ class SponsorChecker:
         self.h1b_set = set(h1b)
         self.everify_set = set(everify)
 
+        self.h1b_found = {}
+        self.everify_found = {}
+
     def check(self, company: str, threshold_sort=90, threshold_set=88):
         norm = normalize_company_name(company)
         if not norm:
             return {'h1b': False, 'everify': False}
+        
+        result = {}
+        if norm in self.h1b_found:
+            result['h1b'] = self.h1b_found[norm]
+        else:
+            result['h1b'] = self._match(norm, self.h1b_list, threshold_sort, threshold_set)
+            self.h1b_found[norm] = result['h1b']
 
-        h1b   = self._match(norm, self.h1b_list,     threshold_sort, threshold_set)
-        ev    = self._match(norm, self.everify_list,  threshold_sort, threshold_set)
-        return {'h1b': h1b, 'everify': ev}
+        if norm in self.everify_found:
+            result['everify'] = self.everify_found[norm]
+        else:   
+            result['everify'] = self._match(norm, self.everify_list, threshold_sort, threshold_set)
+            self.everify_found[norm] = result['everify']
+
+        return result
 
     def _match(self, norm, keys, threshold_sort, threshold_set):
         # Layer 1: exact

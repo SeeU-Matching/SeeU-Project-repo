@@ -1,5 +1,5 @@
 """Service layer for concurrent job scraping operations."""
-
+from typing import Tuple
 import logging
 import concurrent.futures
 import threading
@@ -42,7 +42,7 @@ class ConcurrentJobScraperService:
 
     def scrape_and_export_batch(
         self,
-        job_titles: Iterable[str],
+        job_titles: Iterable[Tuple[str, str]],
         locations: Iterable[str],
         output_file: str,
         pages: int = 1,
@@ -111,6 +111,7 @@ class ConcurrentJobScraperService:
             t_title = task_item["title"] 
             t_location = task_item["location"]
             t_exp = task_item["exp"]
+            t_category = task_item["category"]
             last_page = task_item.get("page", 0)
 
             current_proxy = main_proxy_manager.get_proxy() if main_proxy_manager else None
@@ -154,6 +155,7 @@ class ConcurrentJobScraperService:
                             job["search_title"] = t_title
                             job["search_location"] = t_location
                             job["experience_level"] = t_exp
+                            job["search_category"] = t_category
                         listing_queue.put({
                             "listings": page_results,
                             "detail_idx": 0,
@@ -263,9 +265,10 @@ class ConcurrentJobScraperService:
             {
                 "title" : title, 
                 "location": loc, 
+                "category": category,
                 "exp": exp,
                 "page": 0
-            }  for title in job_titles for loc in locations for exp in experience_levels
+            }  for (category, title) in job_titles for loc in locations for exp in experience_levels
         ]
 
         # 1. Start Consumer Pool (Detail Fetchers)

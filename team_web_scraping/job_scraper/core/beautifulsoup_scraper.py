@@ -334,6 +334,7 @@ class BeautifulSoupScraper:
                     job_url="" if job_data.get("job_id") == "" \
                         else f"https://www.linkedin.com/jobs/view/{job_data.get('job_id')}",
                     search_title=job_data.get("search_title"),
+                    search_category=job_data.get("search_category"),
                     search_location=job_data.get("search_location"),
                     experience_level=ExperienceLevel(job_data.get("experience_level")).name
                 )

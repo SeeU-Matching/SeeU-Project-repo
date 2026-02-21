@@ -1,10 +1,13 @@
 import os
 from datetime import datetime
 import logging
+import time
 import boto3
 from job_scraper import ConcurrentJobScraperService
+from job_scraper.core.sponsor_checker import SponsorChecker
 from job_scraper.models.enums import States, ExperienceLevel
 from job_scraper.utils.keyword_loader import load_job_keywords
+from job_scraper.utils.save_csv import load_jobs_from_csv, save_jobs_to_csv
 
 # Configure logging
 logging.basicConfig(level=logging.WARN,\
@@ -31,8 +34,9 @@ def run_job():
     keywords_map = load_job_keywords()
     job_titles = []
     # flattened list of all keywords
-    for _, kws in keywords_map.items():
-        job_titles.extend(kws)
+    for category, kws in keywords_map.items():
+        for kw in kws:
+            job_titles.extend((category, kw))
 
     # Optional: Limit job titles for testing if env var set
     if os.environ.get("LIMIT_KEYWORDS"):
@@ -80,6 +84,20 @@ def run_job():
     except Exception as e:
         logger.error("Scraping failed: %s", e)
         raise
+    
+    # 3.3 check h1b status
+
+    jobs = load_jobs_from_csv(local_output_file)
+    start_time = time.time()
+    sc = SponsorChecker()
+    for job in jobs:
+        result = sc.check(job.company)
+        job.h1b_sponsored = "Yes" if result["h1b"] else "Unknown"
+        job.e_verified = "Yes" if result["everify"] else "Unknown"
+    end_time = time.time()
+    print(f"Processed h1b info completed in {end_time - start_time:.2f} seconds.")
+    save_jobs_to_csv(jobs, local_output_file)
+    
 
     # 4. Upload to S3
     if not dry_run and s3_bucket:

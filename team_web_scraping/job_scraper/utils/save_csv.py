@@ -7,18 +7,7 @@ def save_jobs_to_csv(jobs: List[JobResult], file_path: str ="jobs.csv", mode: st
     """
         Util function to save jobResults into csv
     """
-    fieldnames = [
-        "title",
-        "company",
-        "location",
-        "description",
-        "job_url",
-        "apply_url",
-        "industry",
-        "search_title",
-        "search_location",
-        "experience_level",
-    ]
+    fieldnames = list(JobResult.model_fields.keys())
 
     with open(file_path, mode, newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -28,3 +17,21 @@ def save_jobs_to_csv(jobs: List[JobResult], file_path: str ="jobs.csv", mode: st
         if jobs:
             for job in jobs:
                 writer.writerow(job.model_dump())
+
+def load_jobs_from_csv(file_path: str) -> List[JobResult]:
+    jobs = []
+
+    with open(file_path, "r", newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+
+        for row in reader:
+            # Convert empty strings back to None
+            cleaned_row = {
+                key: (value if value != "" else None)
+                for key, value in row.items()
+            }
+
+            job = JobResult.model_validate(cleaned_row)
+            jobs.append(job)
+
+    return jobs

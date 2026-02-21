@@ -20,11 +20,16 @@ class JobResult(BaseModel):
     location: str
     description: str
     job_url: str
-    apply_url: str
+    apply_url: Optional[str] = None
     industry: Optional[str]
+
+    search_category: Optional[str] = None
     search_title: Optional[str] = None
     search_location: Optional[str] = None
     experience_level: Optional[str] = None
+
+    h1b_sponsored: Optional[str] = None
+    e_verified: Optional[str] = None
 
 class JobDetail(BaseModel):
     description: str = ""
